@@ -23,7 +23,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 
 # JWT
-jsonwebtoken = "10.3.0"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 
 # Password hashing
 argon2 = "0.5"
@@ -61,6 +61,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Error handling
 thiserror = "2.0.10"
 anyhow = "1"
+
+[dev-dependencies]
+axum-test = "18.7.0"
 
 [profile.release]
 opt-level = 3

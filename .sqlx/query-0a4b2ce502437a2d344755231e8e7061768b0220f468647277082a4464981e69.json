@@ -1,0 +1,69 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n            u.id, u.email, u.username,\n            u.role::text as role,\n            u.is_verified, u.is_active,\n            u.created_at,\n            COUNT(rt.id) FILTER (WHERE rt.revoked_at IS NULL AND rt.expires_at > NOW()) as active_sessions\n           FROM users u\n           LEFT JOIN refresh_tokens rt ON rt.user_id = u.id\n           WHERE ($1::text IS NULL OR u.email ILIKE $1 OR u.username ILIKE $1)\n             AND ($2::text IS NULL OR u.role::text = $2)\n             AND ($3::bool IS NULL OR u.is_verified = $3)\n             AND ($4::bool IS NULL OR u.is_active = $4)\n           GROUP BY u.id\n           ORDER BY u.created_at DESC\n           LIMIT $5 OFFSET $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_verified",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_active",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "active_sessions",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "0a4b2ce502437a2d344755231e8e7061768b0220f468647277082a4464981e69"
+}
