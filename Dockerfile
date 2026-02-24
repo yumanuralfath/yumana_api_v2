@@ -11,6 +11,13 @@ WORKDIR /app
 
 # Cache dependencies first
 COPY Cargo.toml Cargo.lock ./
+
+# Copy the cache directory
+COPY .sqlx ./.sqlx
+
+# Build actual app with offline flag
+ENV SQLX_OFFLINE=true
+
 RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release 2>/dev/null; \
     rm -rf src target/release/deps/yumana_api_v2*
