@@ -1,6 +1,7 @@
 use crate::integrattion::helpers::app::{TestApp, auth_header};
 use crate::integrattion::helpers::fixtures::*;
 use serde_json::{Value, json};
+use uuid::Uuid;
 
 // ═══════════════════════════════════════════════════════════════
 // REGISTER
@@ -347,36 +348,36 @@ async fn test_refresh_token_success() {
     let app = TestApp::new().await;
     let user = create_verified_user(&app.db.pool).await;
 
-    // Login dulu untuk dapat refresh token
+    // Login untuk dapat refresh token
     let login_res = app
         .server
         .post("/api/auth/login")
         .json(&json!({"email": user.email, "password": user.password}))
         .await;
     let login_body: Value = login_res.json();
-    let refresh_token = login_body["data"]["refresh_token"].as_str().unwrap();
-    let old_access = login_body["data"]["access_token"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let old_refresh = login_body["data"]["refresh_token"].as_str().unwrap();
+    let old_access = login_body["data"]["access_token"].as_str().unwrap();
 
-    // Refresh
+    // Generate new jti
+    let new_jti = Uuid::new_v4().to_string();
+
+    // Refresh token
     let res = app
         .server
         .post("/api/auth/refresh")
-        .json(&json!({"refresh_token": refresh_token}))
+        .json(&json!({"refresh_token": old_refresh, "jti": new_jti}))
         .await;
 
     assert_eq!(res.status_code(), 200);
     let body: Value = res.json();
+
+    // Pastikan token baru berbeda dari yang lama
+    assert_ne!(body["data"]["access_token"].as_str().unwrap(), old_access);
+    assert_ne!(body["data"]["refresh_token"].as_str().unwrap(), old_refresh);
+
+    // Pastikan format token valid
     assert!(body["data"]["access_token"].is_string());
     assert!(body["data"]["refresh_token"].is_string());
-    // Token baru harus berbeda (rotasi)
-    assert_ne!(body["data"]["access_token"].as_str().unwrap(), old_access);
-    assert_ne!(
-        body["data"]["refresh_token"].as_str().unwrap(),
-        refresh_token
-    );
 }
 
 #[tokio::test]

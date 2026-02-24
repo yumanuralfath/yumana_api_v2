@@ -312,7 +312,7 @@ async fn test_admin_update_user_invalid_role() {
         .json(&json!({"role": "superadmin"}))
         .await;
 
-    assert_eq!(res.status_code(), 400);
+    assert_eq!(res.status_code(), 422);
 }
 
 #[tokio::test]

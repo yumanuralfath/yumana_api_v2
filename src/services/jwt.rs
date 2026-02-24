@@ -12,6 +12,7 @@ pub struct AccessTokenClaims {
     pub email: String,
     pub username: String,
     pub role: UserRole,
+    pub jti: String,
     pub exp: i64,
     pub iat: i64,
     pub token_type: String,
@@ -64,6 +65,7 @@ impl JwtService {
             exp: now + self.access_expiry,
             iat: now,
             token_type: "access".to_string(),
+            jti: Uuid::new_v4().to_string(),
         };
 
         encode(
