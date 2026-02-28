@@ -1,10 +1,7 @@
 use lettre::{
     AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
-    message::header::ContentType,
-    transport::smtp::{
-        authentication::Credentials,
-        client::{Tls, TlsParameters},
-    },
+    message::{Mailbox, header::ContentType},
+    transport::smtp::authentication::Credentials,
 };
 
 use crate::config::Config;
@@ -21,11 +18,8 @@ impl EmailService {
     pub fn new(config: &Config) -> anyhow::Result<Self> {
         let creds = Credentials::new(config.smtp_username.clone(), config.smtp_password.clone());
 
-        let tls_params = TlsParameters::new(config.smtp_host.clone())?;
-
-        let mailer = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.smtp_host)
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::relay(&config.smtp_host)?
             .port(config.smtp_port)
-            .tls(Tls::Wrapper(tls_params))
             .credentials(creds)
             .build();
 
@@ -45,10 +39,9 @@ impl EmailService {
         subject: &str,
         html_body: String,
     ) -> anyhow::Result<()> {
-        let from = format!("{} <{}>", self.from_name, self.from_email)
-            .parse()
-            .unwrap();
-        let to = format!("{} <{}>", to_name, to_email).parse().unwrap();
+        let from = Mailbox::new(Some(self.from_name.clone()), self.from_email.parse()?);
+
+        let to = Mailbox::new(Some(to_name.to_string()), to_email.parse()?);
 
         let email = Message::builder()
             .from(from)
@@ -58,6 +51,7 @@ impl EmailService {
             .body(html_body)?;
 
         self.mailer.send(email).await?;
+
         Ok(())
     }
 
@@ -68,6 +62,7 @@ impl EmailService {
         token: &str,
     ) -> anyhow::Result<()> {
         let verify_url = format!("{}/api/auth/verify-email?token={}", self.app_url, token);
+
         let html = email_template_verification(username, &verify_url, &self.from_name);
 
         self.send_email(
@@ -86,6 +81,7 @@ impl EmailService {
         token: &str,
     ) -> anyhow::Result<()> {
         let reset_url = format!("{}/reset-password?token={}", self.frontend_url, token);
+
         let html = email_template_reset_password(username, &reset_url, &self.from_name);
 
         self.send_email(
@@ -132,7 +128,7 @@ fn email_template_verification(username: &str, verify_url: &str, app_name: &str)
         </td></tr>
         <!-- Footer -->
         <tr><td style="background:#f9fafb;padding:20px 36px;text-align:center;border-top:1px solid #e5e7eb;">
-          <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; 2025 {app_name}. All rights reserved.</p>
+          <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; 2026 {app_name}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -180,7 +176,7 @@ fn email_template_reset_password(username: &str, reset_url: &str, app_name: &str
         </td></tr>
         <!-- Footer -->
         <tr><td style="background:#f9fafb;padding:20px 36px;text-align:center;border-top:1px solid #e5e7eb;">
-          <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; 2025 {app_name}. All rights reserved.</p>
+          <p style="color:#9ca3af;font-size:12px;margin:0;">&copy; 2026 {app_name}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>

@@ -31,11 +31,15 @@ impl Config {
             env::var("DATABASE_URL")?
         };
 
-        let app_url = if let Some(domain) = &domain_url {
-            format!("https://{}", domain)
-        } else {
-            env::var("APP_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
-        };
+        let app_url = env::var("APP_URL")
+            .map(|url| {
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    url
+                } else {
+                    format!("https://{}", url)
+                }
+            })
+            .unwrap_or_else(|_| "http://localhost:8080".to_string());
 
         let frontend_url = if let Some(domain) = &domain_url {
             format!("https://www.{}", domain)
@@ -63,7 +67,7 @@ impl Config {
                 .parse()?,
             smtp_username: env::var("SMTP_USERNAME")?,
             smtp_password: env::var("SMTP_PASSWORD")?,
-            smtp_from_name: env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Yumana".to_string()),
+            smtp_from_name: env::var("SMTP_FROM_NAME").unwrap_or_else(|_| "Admin Yuma".to_string()),
             smtp_from_email: env::var("SMTP_FROM_EMAIL")?,
             app_url,
             frontend_url,
