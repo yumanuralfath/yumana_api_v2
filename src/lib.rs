@@ -87,6 +87,5 @@ pub fn init_cors(config: &Config) -> CorsLayer {
             ))
             .allow_methods(Any)
             .allow_headers(Any)
-            .allow_credentials(true)
     }
 }
