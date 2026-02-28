@@ -18,11 +18,18 @@ pub struct Config {
     pub smtp_from_email: String,
     pub app_url: String,
     pub frontend_url: String,
+    pub domain_url: Option<String>,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let domain_url = env::var("DOMAIN_URL").ok();
+
+        let database_url = if cfg!(debug_assertions) {
+            env::var("DATABASE_URL_DEV").or_else(|_| env::var("DATABASE_URL"))?
+        } else {
+            env::var("DATABASE_URL")?
+        };
 
         let app_url = if let Some(domain) = &domain_url {
             format!("https://{}", domain)
@@ -36,11 +43,12 @@ impl Config {
             env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string())
         };
         Ok(Config {
+            domain_url,
             host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             port: env::var("PORT")
                 .unwrap_or_else(|_| "8080".to_string())
                 .parse()?,
-            database_url: env::var("DATABASE_URL")?,
+            database_url,
             jwt_access_secret: env::var("JWT_ACCESS_SECRET")?,
             jwt_refresh_secret: env::var("JWT_REFRESH_SECRET")?,
             jwt_access_expiry: env::var("JWT_ACCESS_EXPIRY")

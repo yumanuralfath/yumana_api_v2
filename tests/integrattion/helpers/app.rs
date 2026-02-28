@@ -15,6 +15,7 @@ use super::db::TestDb;
 /// Config test — semua value hardcode, SMTP dummy port tidak akan connect
 pub fn test_config(database_url: &str) -> Config {
     Config {
+        domain_url: Some("test_website.com".to_string()),
         host: "127.0.0.1".to_string(),
         port: 8080,
         database_url: database_url.to_string(),

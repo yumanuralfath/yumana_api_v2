@@ -10,8 +10,9 @@ use crate::config::Config;
 use std::sync::Arc;
 use std::time::Duration;
 
+use axum::http;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 
 use services::{email::EmailService, jwt::JwtService};
 
@@ -51,9 +52,24 @@ pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<EmailService>) {
     (jwt, email)
 }
 
-pub fn init_cors() -> CorsLayer {
-    CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any)
+pub fn init_cors(config: &Config) -> CorsLayer {
+    if cfg!(debug_assertions) {
+        CorsLayer::new()
+            .allow_origin(tower_http::cors::Any)
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any)
+    } else {
+        let origin_str = config
+            .domain_url
+            .as_ref()
+            .expect("DOMAIN_URL harus diset di release build");
+
+        let origin_header = http::HeaderValue::from_str(&format!("https://{}", origin_str))
+            .expect("Invalid DOMAIN_URL");
+
+        CorsLayer::new()
+            .allow_origin(origin_header)
+            .allow_methods(tower_http::cors::Any)
+            .allow_headers(tower_http::cors::Any)
+    }
 }
