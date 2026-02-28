@@ -7,12 +7,16 @@ pub mod services;
 pub mod utils;
 
 use crate::config::Config;
+use axum::http;
+use http::HeaderValue;
+use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use std::time::Duration;
-
-use axum::http;
-use sqlx::postgres::PgPoolOptions;
 use tower_http::cors::CorsLayer;
+
+use axum::http::request::Parts;
+use tower_http::cors::AllowOrigin;
+use tower_http::cors::Any;
 
 use services::{email::EmailService, jwt::JwtService};
 
@@ -55,21 +59,34 @@ pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<EmailService>) {
 pub fn init_cors(config: &Config) -> CorsLayer {
     if cfg!(debug_assertions) {
         CorsLayer::new()
-            .allow_origin(tower_http::cors::Any)
-            .allow_methods(tower_http::cors::Any)
-            .allow_headers(tower_http::cors::Any)
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
     } else {
-        let origin_str = config
+        let base_domain = config
             .domain_url
             .as_ref()
-            .expect("DOMAIN_URL harus diset di release build");
-
-        let origin_header = http::HeaderValue::from_str(&format!("https://{}", origin_str))
-            .expect("Invalid DOMAIN_URL");
+            .expect("DOMAIN_URL harus diset di release build")
+            .to_string();
 
         CorsLayer::new()
-            .allow_origin(origin_header)
-            .allow_methods(tower_http::cors::Any)
-            .allow_headers(tower_http::cors::Any)
+            .allow_origin(AllowOrigin::predicate(
+                move |origin: &HeaderValue, _parts: &Parts| {
+                    if let Ok(origin_str) = origin.to_str() {
+                        // origin format biasanya: https://auth.yumana.my.id
+                        if let Some(host) = origin_str
+                            .strip_prefix("https://")
+                            .or_else(|| origin_str.strip_prefix("http://"))
+                        {
+                            return host == base_domain
+                                || host.ends_with(&format!(".{}", base_domain));
+                        }
+                    }
+                    false
+                },
+            ))
+            .allow_methods(Any)
+            .allow_headers(Any)
+            .allow_credentials(true)
     }
 }
