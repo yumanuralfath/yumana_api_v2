@@ -1,4 +1,5 @@
 use crate::integrattion::helpers::app::{TestApp, auth_header};
+use crate::integrattion::helpers::db::run_test;
 use crate::integrattion::helpers::fixtures::{
     create_admin_user, create_inactive_user, create_unverified_user, create_verified_user,
 };
@@ -26,27 +27,30 @@ async fn login_as(app: &TestApp, email: &str, password: &str) -> String {
 
 #[tokio::test]
 async fn test_admin_stats_success() {
-    let app = TestApp::new().await;
-    let admin = create_admin_user(&app.db.pool).await;
-    let token = login_as(&app, &admin.email, &admin.password).await;
+    run_test(|app| async move {
+        let admin = create_admin_user(&app.db.pool).await;
+        let token = login_as(&app, &admin.email, &admin.password).await;
 
-    // Buat beberapa user untuk data stats
-    create_verified_user(&app.db.pool).await;
-    create_unverified_user(&app.db.pool).await;
-    create_inactive_user(&app.db.pool).await;
+        // Buat beberapa user untuk data stats
+        create_verified_user(&app.db.pool).await;
+        create_unverified_user(&app.db.pool).await;
+        create_inactive_user(&app.db.pool).await;
 
-    let res = app
-        .server
-        .get("/api/admin/stats")
-        .add_header("Authorization", auth_header(&token))
-        .await;
+        let res = app
+            .server
+            .get("/api/admin/stats")
+            .add_header("Authorization", auth_header(&token))
+            .await;
 
-    assert_eq!(res.status_code(), 200);
-    let body: Value = res.json();
-    assert!(body["data"]["total_users"].as_i64().unwrap() >= 4); // 3 + 1 admin
-    assert!(body["data"]["verified_users"].is_number());
-    assert!(body["data"]["active_sessions"].is_number());
-    assert!(body["data"]["new_users_today"].is_number());
+        assert_eq!(res.status_code(), 200);
+        let body: Value = res.json();
+        assert!(body["data"]["total_users"].as_i64().unwrap() >= 4); // 3 + 1 admin
+        assert!(body["data"]["verified_users"].is_number());
+        assert!(body["data"]["active_sessions"].is_number());
+        assert!(body["data"]["new_users_today"].is_number());
+        app
+    })
+    .await;
 }
 
 #[tokio::test]
@@ -62,6 +66,7 @@ async fn test_admin_stats_forbidden_for_user() {
         .await;
 
     assert_eq!(res.status_code(), 403);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -70,6 +75,7 @@ async fn test_admin_stats_unauthorized_no_token() {
 
     let res = app.server.get("/api/admin/stats").await;
     assert_eq!(res.status_code(), 401);
+    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -96,6 +102,7 @@ async fn test_admin_list_users_success() {
     assert!(body["data"].is_array());
     assert!(body["pagination"]["total"].as_i64().unwrap() >= 2);
     assert_eq!(body["pagination"]["page"], 1);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -119,6 +126,7 @@ async fn test_admin_list_users_pagination() {
     let body: Value = res.json();
     assert_eq!(body["data"].as_array().unwrap().len(), 2);
     assert_eq!(body["pagination"]["per_page"], 2);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -143,6 +151,7 @@ async fn test_admin_list_users_filter_by_role() {
     for u in users {
         assert_eq!(u["role"], "admin");
     }
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -166,6 +175,7 @@ async fn test_admin_list_users_filter_unverified() {
     for u in users {
         assert_eq!(u["is_verified"], false);
     }
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -189,6 +199,7 @@ async fn test_admin_list_users_search() {
     let users = body["data"].as_array().unwrap();
     // Harus ketemu setidaknya 1 user
     assert!(!users.is_empty());
+    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -212,6 +223,7 @@ async fn test_admin_get_user_success() {
     let body: Value = res.json();
     assert_eq!(body["data"]["id"], user.id.to_string());
     assert_eq!(body["data"]["email"], user.email);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -228,6 +240,7 @@ async fn test_admin_get_user_not_found() {
         .await;
 
     assert_eq!(res.status_code(), 404);
+    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -259,6 +272,7 @@ async fn test_admin_update_user_deactivate() {
         .json(&json!({"email": user.email, "password": user.password}))
         .await;
     assert_eq!(login_res.status_code(), 403);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -278,6 +292,7 @@ async fn test_admin_update_user_promote_to_admin() {
     assert_eq!(res.status_code(), 200);
     let body: Value = res.json();
     assert_eq!(body["data"]["role"], "admin");
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -296,6 +311,7 @@ async fn test_admin_update_user_verify_manually() {
 
     assert_eq!(res.status_code(), 200);
     assert_eq!(res.json::<Value>()["data"]["is_verified"], true);
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -313,6 +329,8 @@ async fn test_admin_update_user_invalid_role() {
         .await;
 
     assert_eq!(res.status_code(), 422);
+
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -329,6 +347,8 @@ async fn test_admin_update_user_not_found() {
         .await;
 
     assert_eq!(res.status_code(), 404);
+
+    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -358,6 +378,8 @@ async fn test_admin_delete_user_success() {
         .unwrap();
 
     assert!(!exists, "User harus terhapus dari database");
+
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -373,6 +395,8 @@ async fn test_admin_delete_user_not_found() {
         .await;
 
     assert_eq!(res.status_code(), 404);
+
+    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -389,6 +413,8 @@ async fn test_admin_delete_user_forbidden_for_user() {
         .await;
 
     assert_eq!(res.status_code(), 403);
+
+    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -436,4 +462,6 @@ async fn test_admin_revoke_user_sessions() {
         401,
         "Sesi yang direvoke admin harus tidak bisa refresh"
     );
+
+    app.db.cleanup().await;
 }

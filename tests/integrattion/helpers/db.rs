@@ -1,6 +1,8 @@
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use uuid::Uuid;
 
+use crate::integrattion::helpers::app::TestApp;
+
 /// Satu test DB context — tiap test punya schema sendiri
 #[derive(Debug)]
 pub struct TestDb {
@@ -134,26 +136,12 @@ impl TestDb {
     }
 }
 
-// Auto cleanup ketika TestDb keluar dari scope
-impl Drop for TestDb {
-    fn drop(&mut self) {
-        // Spawn blocking untuk cleanup async dari sync Drop
-        let schema = self.schema.clone();
-        let root_url = std::env::var("DATABASE_URL").unwrap_or_default();
-
-        std::thread::spawn(move || {
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                if let Ok(pool) = PgPoolOptions::new()
-                    .max_connections(1)
-                    .connect(&root_url)
-                    .await
-                {
-                    let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
-                        .execute(&pool)
-                        .await;
-                }
-            });
-        });
-    }
+pub async fn run_test<F, Fut>(test_fn: F)
+where
+    F: FnOnce(TestApp) -> Fut,
+    Fut: Future<Output = TestApp>,
+{
+    let app = TestApp::new().await;
+    let app = test_fn(app).await;
+    app.db.cleanup().await;
 }
