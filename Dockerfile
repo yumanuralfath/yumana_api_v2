@@ -1,4 +1,4 @@
-# ─── Build Stage ──────────────────────────────────────────────
+# ─── Build Stage ──────────────────────────────────────────────────────────────
 FROM rust:1.93-slim-bookworm AS builder
 
 # Install build dependencies
@@ -9,22 +9,26 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# 1️⃣ Copy Cargo files dulu untuk caching dependencies
+# Cache dependencies first
 COPY Cargo.toml Cargo.lock ./
+
+# Copy the cache directory
 COPY .sqlx ./.sqlx
 
-# Build dependencies only
-RUN cargo fetch --locked
-
-# 2️⃣ Copy source code dan build final binary
-COPY src ./src
+# Build actual app with offline flag
 ENV SQLX_OFFLINE=true
+
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN cargo build --release 2>/dev/null; \
+    rm -rf src target/release/deps/yumana_api_v2*
+
+# Build actual app
+COPY src ./src
 RUN cargo build --release
 
-# ─── Runtime Stage ───────────────────────────────────────────
+# ─── Runtime Stage ────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
@@ -32,7 +36,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy binary dari stage builder
 COPY --from=builder /app/target/release/yumana_api_v2 .
 
 # Railway injects PORT env variable
