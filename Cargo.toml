@@ -60,6 +60,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 thiserror = "2.0.10"
 anyhow = "1"
 
+#Template Engine for mail template
+tera = "1.20.1"
+
 [dev-dependencies]
 axum-test = "18.7.0"
 
