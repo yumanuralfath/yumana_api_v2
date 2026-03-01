@@ -38,6 +38,8 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/yumana_api_v2 .
 
+COPY templates ./templates
+
 # Railway injects PORT env variable
 EXPOSE 8080
 

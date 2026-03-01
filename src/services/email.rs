@@ -33,7 +33,7 @@ impl EmailService {
             .build();
         // info!("mailer: {:?}", mailer);
 
-        let tera = Tera::new("templates/**/*")?;
+        let tera = Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*"))?;
         // info!("Loaded tera template: {:#?}", tera);
 
         Ok(Self {
