@@ -31,15 +31,17 @@ impl Config {
             env::var("DATABASE_URL")?
         };
 
-        let app_url = env::var("APP_URL")
-            .map(|url| {
-                if url.starts_with("http://") || url.starts_with("https://") {
-                    url
-                } else {
-                    format!("https://{}", url)
-                }
-            })
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let app_url: String = if cfg!(debug_assertions) {
+            "http://localhost:8080".to_string()
+        } else {
+            let url = env::var("APP_URL").expect("APP_URL must exist at production");
+
+            if url.starts_with("http://") || url.starts_with("https://") {
+                url
+            } else {
+                format!("https://{}", url)
+            }
+        };
 
         let frontend_url = if let Some(domain) = &domain_url {
             format!("https://www.{}", domain)
