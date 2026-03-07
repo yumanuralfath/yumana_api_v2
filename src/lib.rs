@@ -89,3 +89,8 @@ pub fn init_cors(config: &Config) -> CorsLayer {
             .allow_headers(Any)
     }
 }
+
+pub async fn run_migrations(db: &sqlx::PgPool) -> anyhow::Result<()> {
+    sqlx::migrate!("./migrations").run(db).await?;
+    Ok(())
+}
