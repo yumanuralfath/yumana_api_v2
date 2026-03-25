@@ -1,13 +1,16 @@
 use axum::http::HeaderValue;
 use axum_test::TestServer;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use sqlx::postgres::PgPoolOptions;
 
 use yumana_api_v2::{
     config::{Config, state::AppState},
     routes::create_router,
-    services::{email::EmailService, jwt::JwtService},
+    services::{
+        jwt::JwtService,
+        mailer::{SharedZoho, ZohoData, method::ZohoMailer},
+    },
 };
 
 use super::db::TestDb;
@@ -32,6 +35,11 @@ pub fn test_config(database_url: &str) -> Config {
         smtp_from_email: "test@test.com".to_string(),
         app_url: "http://localhost:8080".to_string(),
         frontend_url: "http://localhost:3000".to_string(),
+        client_id: "test".to_string(),
+        client_secret: "test".to_string(),
+        redirect_url: "http://test.test".to_string(),
+        zoho_refresh_token: "test".to_string(),
+        account_id: "dasdasd".to_string(),
     }
 }
 
@@ -67,7 +75,18 @@ impl TestApp {
         // EmailService dengan SMTP dummy — init akan sukses, pengiriman gagal saat runtime
         // karena test server spawn email di background task (tokio::spawn), kegagalan ini
         // tidak crash handler, hanya log error
-        let email = Arc::new(EmailService::new(&config).expect("Gagal init EmailService"));
+        let zoho_state: SharedZoho = Arc::new(Mutex::new(ZohoData {
+            access_token: "".into(),
+            refresh_token: config.zoho_refresh_token.clone(),
+            client_id: config.client_id.clone(),
+            client_secret: config.client_secret.clone(),
+            api_domain: "https://www.zohoapis.com".into(),
+            token_type: "Bearer".into(),
+            expires_in: 3600,
+            account_id: config.account_id.clone(),
+        }));
+
+        let email = Arc::new(ZohoMailer::new(zoho_state).expect("Gagal init EmailService"));
 
         let state = AppState {
             db: test_pool,

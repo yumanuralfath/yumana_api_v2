@@ -5,6 +5,7 @@ use tracing::{Level, error, info};
 use yumana_api_v2::{
     config::{Config, state::AppState},
     init_cors, init_db, init_services, init_tracing_env, routes, run_migrations,
+    services::mailer::callback,
 };
 
 #[tokio::main]
@@ -32,6 +33,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let (jwt, email) = init_services(&config);
+
+    let refresh_state = email.state.clone();
+
+    tokio::spawn(async move {
+        callback::refresh_auth(refresh_state).await;
+    });
 
     let app_state = AppState {
         db,

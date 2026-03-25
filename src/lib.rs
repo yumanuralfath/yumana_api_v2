@@ -7,10 +7,13 @@ pub mod services;
 pub mod utils;
 
 use crate::config::Config;
+use crate::services::mailer::SharedZoho;
+use crate::services::mailer::ZohoData;
+use crate::services::mailer::method::ZohoMailer;
 use axum::http;
 use http::HeaderValue;
 use sqlx::postgres::PgPoolOptions;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tower_http::cors::CorsLayer;
 
@@ -18,7 +21,7 @@ use axum::http::request::Parts;
 use tower_http::cors::AllowOrigin;
 use tower_http::cors::Any;
 
-use services::{email::EmailService, jwt::JwtService};
+use services::jwt::JwtService;
 
 pub fn init_tracing_env() {
     dotenvy::dotenv().ok();
@@ -43,7 +46,7 @@ pub async fn init_db(database_url: &str) -> anyhow::Result<sqlx::PgPool> {
     Ok(pool)
 }
 
-pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<EmailService>) {
+pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<ZohoMailer>) {
     let jwt = Arc::new(JwtService::new(
         config.jwt_access_secret.clone(),
         config.jwt_refresh_secret.clone(),
@@ -51,7 +54,18 @@ pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<EmailService>) {
         config.jwt_refresh_expiry,
     ));
 
-    let email = Arc::new(EmailService::new(config).expect("Email init failed"));
+    let zoho_state: SharedZoho = Arc::new(Mutex::new(ZohoData {
+        access_token: "".into(),
+        refresh_token: config.zoho_refresh_token.clone(),
+        client_id: config.client_id.clone(),
+        client_secret: config.client_secret.clone(),
+        api_domain: "https://www.zohoapis.com".into(),
+        token_type: "Bearer".into(),
+        expires_in: 3600,
+        account_id: config.account_id.clone(),
+    }));
+
+    let email = Arc::new(ZohoMailer::new(zoho_state).expect("Email init failed"));
 
     (jwt, email)
 }
