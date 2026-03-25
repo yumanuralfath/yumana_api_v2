@@ -19,6 +19,11 @@ pub struct Config {
     pub app_url: String,
     pub frontend_url: String,
     pub domain_url: Option<String>,
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_url: String,
+    pub zoho_refresh_token: String,
+    pub account_id: String,
 }
 
 impl Config {
@@ -73,6 +78,11 @@ impl Config {
             smtp_from_email: env::var("SMTP_FROM_EMAIL")?,
             app_url,
             frontend_url,
+            client_id: env::var("CLIENT_ID")?,
+            client_secret: env::var("CLIENT_SECRET")?,
+            redirect_url: env::var("REDIRECT_URL")?,
+            zoho_refresh_token: env::var("ZOHO_REFRESH_TOKEN")?,
+            account_id: env::var("ACCOUNT_ID")?,
         })
     }
 }
