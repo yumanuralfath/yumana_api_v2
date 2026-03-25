@@ -24,6 +24,8 @@ RUN cargo build --release 2>/dev/null; \
 
 # Build actual app
 COPY src ./src
+COPY migrations ./migrations
+
 RUN cargo build --release
 
 # ─── Runtime Stage ────────────────────────────────────────────────────────────
