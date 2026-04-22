@@ -527,3 +527,38 @@ pub async fn me(
 
     Ok(success(UserResponse::from(user)))
 }
+
+pub async fn ping_database(
+    State(state): State<AppState>,
+) -> AppResult<impl axum::response::IntoResponse> {
+    sqlx::query_scalar!("INSERT INTO health_checks DEFAULT VALUES")
+        .execute(&state.db)
+        .await?;
+
+    let last_checked = get_last_check(&state.db).await?;
+    let now = time::OffsetDateTime::now_utc();
+
+    let time_since_last = last_checked.map(|last| now - last);
+
+    Ok(success(serde_json::json!({
+        "status": "OK",
+        "last_checked_at": last_checked,
+        "time_since_last_seconds": time_since_last.map(|d| d.whole_seconds()),
+        "message": match time_since_last {
+            Some(d) if d.whole_hours() > 0 => format!("Terakhir dicek {} jam yang lalu", d.whole_hours()),
+            Some(d) if d.whole_minutes() > 0 => format!("Terakhir dicek {} menit yang lalu", d.whole_minutes()),
+            Some(_) => "Baru saja dicek".to_string(),
+            None => "Belum pernah dicek".to_string(),
+        }
+    })))
+}
+
+async fn get_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
+    let result: Option<time::OffsetDateTime> =
+        sqlx::query_scalar!("SELECT MAX(checked_at) FROM health_checks")
+            .fetch_one(db)
+            .await
+            .map_err(|e| AppError::NotFound(e.to_string()))?;
+
+    Ok(result)
+}

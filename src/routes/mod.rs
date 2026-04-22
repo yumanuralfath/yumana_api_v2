@@ -5,12 +5,16 @@ use axum::{
 
 use crate::{
     config::state::AppState,
-    handlers::{admin, auth},
+    handlers::{
+        admin,
+        auth::{self},
+    },
     middleware::auth::{require_admin, require_auth},
 };
 
 pub fn create_router(state: AppState) -> Router {
     let auth_routes = Router::new()
+        .route("/health", get(auth::ping_database))
         .route("/register", post(auth::register))
         .route("/verify-email", get(auth::verify_email))
         .route("/login", post(auth::login))
@@ -39,13 +43,5 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         .nest("/api/auth", auth_routes)
         .nest("/api/admin", admin_routes)
-        .route("/health", get(health_check))
         .with_state(state)
-}
-
-async fn health_check() -> axum::Json<serde_json::Value> {
-    axum::Json(serde_json::json!({
-        "status": "ok",
-        "service": "yumana_api_v2"
-    }))
 }

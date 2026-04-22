@@ -1,2 +1,2 @@
 [deploy]
-healthcheckPath = "/health"
+healthcheckPath = "api/auth/health"

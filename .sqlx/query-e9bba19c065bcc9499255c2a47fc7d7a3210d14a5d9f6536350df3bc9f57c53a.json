@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO health_checks DEFAULT VALUES",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "e9bba19c065bcc9499255c2a47fc7d7a3210d14a5d9f6536350df3bc9f57c53a"
+}
