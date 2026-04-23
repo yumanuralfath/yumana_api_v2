@@ -535,7 +535,7 @@ pub async fn ping_database(
         .execute(&state.db)
         .await?;
 
-    let last_checked = get_last_check(&state.db).await?;
+    let last_checked = get_second_last_check(&state.db).await?;
     let now = time::OffsetDateTime::now_utc();
 
     let time_since_last = last_checked.map(|last| now - last);
@@ -552,13 +552,30 @@ pub async fn ping_database(
         }
     })))
 }
+//
+// async fn get_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
+//     let result: Option<time::OffsetDateTime> =
+//         sqlx::query_scalar!("SELECT MAX(checked_at) FROM health_checks")
+//             .fetch_one(db)
+//             .await
+//             .map_err(|e| AppError::NotFound(e.to_string()))?;
+//
+//     Ok(result)
+// }
 
-async fn get_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
-    let result: Option<time::OffsetDateTime> =
-        sqlx::query_scalar!("SELECT MAX(checked_at) FROM health_checks")
-            .fetch_one(db)
-            .await
-            .map_err(|e| AppError::NotFound(e.to_string()))?;
+async fn get_second_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
+    let result: Option<time::OffsetDateTime> = sqlx::query_scalar!(
+        r#"
+        SELECT checked_at 
+        FROM health_checks 
+        ORDER BY checked_at DESC 
+        LIMIT 1 OFFSET 1
+        "#
+    )
+    .fetch_optional(db) // Gunakan fetch_optional karena baris kedua mungkin tidak ada
+    .await
+    .map_err(|e| AppError::DatabaseError(e))?
+    .expect("yeagh");
 
     Ok(result)
 }
