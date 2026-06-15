@@ -1,12 +1,11 @@
-use axum::extract::Query;
-use axum::{Json, extract::State};
-use rand::RngExt;
-use rand::distr::Alphanumeric;
-use rand::rng;
+use axum::{
+    Json,
+    extract::{Query, State},
+    response::IntoResponse,
+};
 use serde::{Deserialize, Serialize};
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
-use validator::Validate;
 
 use crate::{
     config::state::AppState,
@@ -14,30 +13,45 @@ use crate::{
     models::user::UserResponse,
     utils::{
         errors::{AppError, AppResult},
+        generate_secure_token, get_second_last_check, hash_password, render_verify_result,
         response::{success, success_message},
+        validation::{validate_email, validate_length},
+        verify_password,
     },
-};
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 
 // ─── Request / Response DTOs ──────────────────────────────────────────────
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize)]
 pub struct RegisterRequest {
-    #[validate(length(min = 3, max = 50))]
     pub username: String,
-    #[validate(email)]
     pub email: String,
-    #[validate(length(min = 8, max = 128))]
     pub password: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+impl RegisterRequest {
+    pub fn validate(&self) -> Result<(), AppError> {
+        validate_length("Username", &self.username, 3, 50)?;
+        validate_email(&self.email)?;
+        validate_length("Password", &self.password, 8, 128)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
+}
+
+impl LoginRequest {
+    pub fn validate(&self) -> AppResult<()> {
+        validate_email(&self.email)?;
+        if self.password.is_empty() {
+            return Err(AppError::BadRequest("Password cannot be empty".to_string()));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,17 +64,27 @@ pub struct VerifyEmailQuery {
     pub token: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize)]
 pub struct ForgotPasswordRequest {
-    #[validate(email)]
     pub email: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+impl ForgotPasswordRequest {
+    pub fn validate(&self) -> Result<(), AppError> {
+        validate_email(&self.email)
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ResetPasswordRequest {
     pub token: String,
-    #[validate(length(min = 8, max = 128))]
     pub new_password: String,
+}
+
+impl ResetPasswordRequest {
+    pub fn validate(&self) -> Result<(), AppError> {
+        validate_length("Password", &self.new_password, 8, 128)
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -72,31 +96,6 @@ pub struct AuthResponse {
     pub user: UserResponse,
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────
-fn generate_secure_token(len: usize) -> String {
-    rng()
-        .sample_iter(&Alphanumeric)
-        .take(len)
-        .map(char::from)
-        .collect()
-}
-
-fn hash_password(password: &str) -> AppResult<String> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
-        .map_err(|_| AppError::InternalServerError)
-}
-
-fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
-    let parsed = PasswordHash::new(hash).map_err(|_| AppError::InternalServerError)?;
-    Ok(Argon2::default()
-        .verify_password(password.as_bytes(), &parsed)
-        .is_ok())
-}
-
 // ─── Handlers ─────────────────────────────────────────────────────────────
 
 /// POST /api/auth/register
@@ -105,8 +104,7 @@ pub async fn register(
     Json(body): Json<RegisterRequest>,
 ) -> AppResult<impl axum::response::IntoResponse> {
     // Validate input
-    body.validate()
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    body.validate()?;
 
     // Check email exists
     let email_exists: bool = sqlx::query_scalar!(
@@ -188,51 +186,135 @@ pub async fn register(
 pub async fn verify_email(
     State(state): State<AppState>,
     Query(query): Query<VerifyEmailQuery>,
-) -> AppResult<impl axum::response::IntoResponse> {
+) -> impl axum::response::IntoResponse {
     let now = OffsetDateTime::now_utc();
+    let config = crate::config::Config::from_env().unwrap();
+    let frontend_url = config.frontend_url;
 
     // Find valid token
-    let record = sqlx::query!(
+    let record = match sqlx::query!(
         "SELECT id, user_id, expires_at, used_at FROM email_verifications
          WHERE token = $1",
         query.token
     )
     .fetch_optional(&state.db)
-    .await?
-    .ok_or_else(|| AppError::BadRequest("Invalid verification token".to_string()))?;
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return render_verify_result(
+                "Link Tidak Valid",
+                "Token verifikasi tidak ditemukan atau sudah tidak berlaku.",
+                false,
+                &frontend_url,
+                "Kembali ke Beranda",
+            )
+            .into_response();
+        }
+        Err(_) => {
+            return render_verify_result(
+                "Kesalahan Sistem",
+                "Terjadi kesalahan saat memproses verifikasi Anda.",
+                false,
+                &frontend_url,
+                "Kembali ke Beranda",
+            )
+            .into_response();
+        }
+    };
 
     if record.used_at.is_some() {
-        return Err(AppError::BadRequest("Token already used".to_string()));
+        return render_verify_result(
+            "Sudah Terverifikasi",
+            "Akun Anda sudah pernah diverifikasi sebelumnya. Silakan login.",
+            true,
+            &format!("{}/login", frontend_url),
+            "Login Sekarang",
+        )
+        .into_response();
     }
 
     if record.expires_at < now {
-        return Err(AppError::BadRequest(
-            "Verification token expired".to_string(),
-        ));
+        return render_verify_result(
+            "Link Kadaluarsa",
+            "Link verifikasi ini sudah kadaluarsa (berlaku 24 jam).",
+            false,
+            &frontend_url,
+            "Kembali ke Beranda",
+        )
+        .into_response();
     }
 
     // Mark token as used + verify user
-    let mut tx = state.db.begin().await?;
+    let mut tx = match state.db.begin().await {
+        Ok(t) => t,
+        Err(_) => {
+            return render_verify_result(
+                "Kesalahan Sistem",
+                "Gagal memulai transaksi database.",
+                false,
+                &frontend_url,
+                "Kembali ke Beranda",
+            )
+            .into_response();
+        }
+    };
 
-    sqlx::query!(
+    if sqlx::query!(
         "UPDATE email_verifications SET used_at = NOW() WHERE id = $1",
         record.id
     )
     .execute(&mut *tx)
-    .await?;
+    .await
+    .is_err()
+    {
+        return render_verify_result(
+            "Kesalahan Sistem",
+            "Gagal memperbarui status token.",
+            false,
+            &frontend_url,
+            "Kembali ke Beranda",
+        )
+        .into_response();
+    }
 
-    sqlx::query!(
+    if sqlx::query!(
         "UPDATE users SET is_verified = true WHERE id = $1",
         record.user_id
     )
     .execute(&mut *tx)
-    .await?;
+    .await
+    .is_err()
+    {
+        return render_verify_result(
+            "Kesalahan Sistem",
+            "Gagal memverifikasi akun pengguna.",
+            false,
+            &frontend_url,
+            "Kembali ke Beranda",
+        )
+        .into_response();
+    }
 
-    tx.commit().await?;
+    if tx.commit().await.is_err() {
+        return render_verify_result(
+            "Kesalahan Sistem",
+            "Gagal menyimpan perubahan ke database.",
+            false,
+            &frontend_url,
+            "Kembali ke Beranda",
+        )
+        .into_response();
+    }
 
-    Ok(success_message(
-        "Email verified successfully! You can now login.",
-    ))
+    render_verify_result(
+        "Verifikasi Berhasil",
+        "Selamat! Email Anda telah berhasil diverifikasi. Sekarang Anda dapat mengakses semua fitur kami.",
+        true,
+        &format!("{}/login", frontend_url),
+        "Login Sekarang",
+    )
+    .into_response()
 }
 
 /// POST /api/auth/login
@@ -240,6 +322,9 @@ pub async fn login(
     State(state): State<AppState>,
     Json(body): Json<LoginRequest>,
 ) -> AppResult<impl axum::response::IntoResponse> {
+    // Validate input
+    body.validate()?;
+
     // Find user
     let user = sqlx::query_as::<_, crate::models::user::User>(
         r#"SELECT id, email, username, password_hash,
@@ -398,8 +483,7 @@ pub async fn forgot_password(
     State(state): State<AppState>,
     Json(body): Json<ForgotPasswordRequest>,
 ) -> AppResult<impl axum::response::IntoResponse> {
-    body.validate()
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    body.validate()?;
 
     // Always return success to prevent email enumeration
     let user = sqlx::query_as!(
@@ -448,8 +532,7 @@ pub async fn reset_password(
     State(state): State<AppState>,
     Json(body): Json<ResetPasswordRequest>,
 ) -> AppResult<impl axum::response::IntoResponse> {
-    body.validate()
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    body.validate()?;
 
     let now = OffsetDateTime::now_utc();
 
@@ -528,6 +611,7 @@ pub async fn me(
     Ok(success(UserResponse::from(user)))
 }
 
+/// GET /api/auth/health
 pub async fn ping_database(
     State(state): State<AppState>,
 ) -> AppResult<impl axum::response::IntoResponse> {
@@ -551,31 +635,4 @@ pub async fn ping_database(
             None => "Belum pernah dicek".to_string(),
         }
     })))
-}
-//
-// async fn get_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
-//     let result: Option<time::OffsetDateTime> =
-//         sqlx::query_scalar!("SELECT MAX(checked_at) FROM health_checks")
-//             .fetch_one(db)
-//             .await
-//             .map_err(|e| AppError::NotFound(e.to_string()))?;
-//
-//     Ok(result)
-// }
-
-async fn get_second_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
-    let result: Option<time::OffsetDateTime> = sqlx::query_scalar!(
-        r#"
-        SELECT checked_at 
-        FROM health_checks 
-        ORDER BY checked_at DESC 
-        LIMIT 1 OFFSET 1
-        "#
-    )
-    .fetch_optional(db) // Gunakan fetch_optional karena baris kedua mungkin tidak ada
-    .await
-    .map_err(|e| AppError::DatabaseError(e))?
-    .expect("yeagh");
-
-    Ok(result)
 }
