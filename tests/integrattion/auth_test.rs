@@ -685,3 +685,48 @@ async fn test_health_check() {
     let body: Value = res.json();
     assert_eq!(body["data"]["status"], "OK");
 }
+
+#[tokio::test]
+async fn test_deactivated_user_token_invalidated() {
+    let app = TestApp::new().await;
+    let user = create_verified_user(&app.db.pool).await;
+
+    // 1. Login untuk dapat token
+    let login_res = app
+        .server
+        .post("/api/auth/login")
+        .json(&json!({"email": user.email, "password": user.password}))
+        .await;
+    let token = login_res.json::<Value>()["data"]["access_token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Pastikan awalnya bisa akses
+    let res_before = app
+        .server
+        .get("/api/auth/me")
+        .add_header("Authorization", auth_header(&token))
+        .await;
+    assert_eq!(res_before.status_code(), 200);
+
+    // 2. Nonaktifkan user secara paksa di DB
+    sqlx::query("UPDATE users SET is_active = false WHERE id = $1")
+        .bind(user.id)
+        .execute(&app.db.pool)
+        .await
+        .unwrap();
+
+    // 3. Coba akses lagi dengan token yang sama — HARUS GAGAL (403)
+    let res_after = app
+        .server
+        .get("/api/auth/me")
+        .add_header("Authorization", auth_header(&token))
+        .await;
+
+    assert_eq!(
+        res_after.status_code(),
+        403,
+        "User yang dinonaktifkan tidak boleh bisa akses API meskipun token belum expired"
+    );
+}
