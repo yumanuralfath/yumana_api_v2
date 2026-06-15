@@ -19,14 +19,14 @@
 
 ## 🛠 Tech Stack
 
-| Component | Technology |
-| :--- | :--- |
-| **Language** | Rust (Edition 2024) |
-| **Framework** | [Axum](https://github.com/tokio-rs/axum) |
-| **Runtime** | [Tokio](https://tokio.rs/) |
+| Component        | Technology                                               |
+| :--------------- | :------------------------------------------------------- |
+| **Language**     | Rust (Edition 2024)                                      |
+| **Framework**    | [Axum](https://github.com/tokio-rs/axum)                 |
+| **Runtime**      | [Tokio](https://tokio.rs/)                               |
 | **ORM/Database** | [SQLx](https://github.com/launchbadge/sqlx) (PostgreSQL) |
-| **Templating** | [Askama](https://github.com/djc/askama) |
-| **Testing** | [axum-test](https://github.com/joseph-p/axum-test) |
+| **Templating**   | [Askama](https://github.com/askama-rs/askama)            |
+| **Testing**      | [axum-test](https://github.com/JosephLenton/axum-test)   |
 
 ---
 
@@ -41,18 +41,21 @@
 ### ⚙️ Setup
 
 1. **Clone & Enter:**
+
    ```bash
    git clone https://github.com/yumanuralfath/yumana_api_V2.git
    cd yumana_api_V2
    ```
 
 2. **Environment Configuration:**
+
    ```bash
    cp .env.test .env
    # Edit .env with your specific secrets
    ```
 
 3. **Database Initialization:**
+
    ```bash
    sqlx database create
    sqlx migrate run
@@ -60,12 +63,14 @@
 
 4. **Install Local Git Hooks:**
    We enforce quality control locally. Run this to ensure tests pass before every push:
+
    ```bash
    chmod +x scripts/setup-hooks.sh
    ./scripts/setup-hooks.sh
    ```
 
 5. **Run Development Server:**
+
    ```bash
    cargo run
    ```
@@ -77,11 +82,13 @@
 This project follows a **Local-First CI** approach. Instead of relying on remote runners, we use a Git `pre-push` hook to ensure the codebase is always stable.
 
 ### Manual Testing
+
 ```bash
 cargo test
 ```
 
 ### Pre-push Hook
+
 The installed hook will automatically run `cargo test` whenever you try to `git push`. If any test fails, the push will be aborted, keeping the remote repository clean.
 
 ---
