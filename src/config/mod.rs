@@ -27,7 +27,7 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_env() -> anyhow::Result<Self> {
+    pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let domain_url = env::var("DOMAIN_URL").ok();
 
         let database_url = if cfg!(debug_assertions) {

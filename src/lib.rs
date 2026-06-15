@@ -33,7 +33,7 @@ pub fn init_tracing_env() {
         .init();
 }
 
-pub async fn init_db(database_url: &str) -> anyhow::Result<sqlx::PgPool> {
+pub async fn init_db(database_url: &str) -> Result<sqlx::PgPool, Box<dyn std::error::Error>> {
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .min_connections(1)
@@ -104,7 +104,7 @@ pub fn init_cors(config: &Config) -> CorsLayer {
     }
 }
 
-pub async fn run_migrations(db: &sqlx::PgPool) -> anyhow::Result<()> {
+pub async fn run_migrations(db: &sqlx::PgPool) -> Result<(), Box<dyn std::error::Error>> {
     sqlx::migrate!("./migrations").run(db).await?;
     Ok(())
 }

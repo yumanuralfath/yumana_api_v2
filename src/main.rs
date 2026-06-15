@@ -9,7 +9,7 @@ use yumana_api_v2::{
 };
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing_env();
 
     let config = Config::from_env()?;
@@ -24,13 +24,11 @@ async fn main() -> anyhow::Result<()> {
     info!("url db: {}", &config.database_url);
 
     // Auto Migration
-    match run_migrations(&db).await {
-        Ok(_) => info!("Database migration success"),
-        Err(e) => {
-            error!("Migration Failed: {:?}", e);
-            return Err(e);
-        }
-    }
+    run_migrations(&db).await.map_err(|e| {
+        error!("Migration Failed: {:?}", e);
+        e
+    })?;
+    info!("Database migration success");
 
     let (jwt, email) = init_services(&config);
 
