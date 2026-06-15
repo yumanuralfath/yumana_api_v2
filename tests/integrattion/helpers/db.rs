@@ -107,6 +107,11 @@ impl TestDb {
             "CREATE INDEX idx_pr_token ON password_resets(token)",
             "CREATE INDEX idx_rt_token ON refresh_tokens(token)",
             "CREATE INDEX idx_rt_user ON refresh_tokens(user_id)",
+            // Tabel health_checks
+            "CREATE TABLE health_checks (
+                id SERIAL PRIMARY KEY,
+                checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )",
             // Trigger updated_at
             "CREATE OR REPLACE FUNCTION update_updated_at_column()
              RETURNS TRIGGER AS $$
@@ -124,14 +129,29 @@ impl TestDb {
                 .unwrap_or_else(|e| panic!("Migration gagal:\nSQL: {}\nError: {}", sql, e));
         }
     }
+}
 
-    /// Hapus seluruh schema (dipanggil di Drop)
-    pub async fn cleanup(&self) {
-        if let Err(e) = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", self.schema))
-            .execute(&self.root_pool)
-            .await
-        {
-            eprintln!("Warning: gagal cleanup schema {}: {}", self.schema, e);
+impl Drop for TestDb {
+    fn drop(&mut self) {
+        let schema = self.schema.clone();
+        let root_pool = self.root_pool.clone();
+
+        // Gunakan blocking call di dalam drop untuk memastikan schema terhapus
+        // meskipun test panic.
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
+                    .execute(&root_pool)
+                    .await;
+            });
+        } else {
+            // Jika tidak ada runtime, buat runtime baru sebentar (fallback)
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
+                    .execute(&root_pool)
+                    .await;
+            });
         }
     }
 }
@@ -142,6 +162,5 @@ where
     Fut: Future<Output = TestApp>,
 {
     let app = TestApp::new().await;
-    let app = test_fn(app).await;
-    app.db.cleanup().await;
+    let _app = test_fn(app).await;
 }

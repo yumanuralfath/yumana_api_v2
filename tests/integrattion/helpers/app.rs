@@ -15,7 +15,7 @@ use yumana_api_v2::{
 
 use super::db::TestDb;
 
-/// Config test — semua value hardcode, SMTP dummy port tidak akan connect
+/// Config test — semua value hardcode
 pub fn test_config(database_url: &str) -> Config {
     Config {
         domain_url: Some("test_website.com".to_string()),
@@ -26,7 +26,6 @@ pub fn test_config(database_url: &str) -> Config {
         jwt_refresh_secret: "test-refresh-secret-panjang-sekali-harus-32-char-min".to_string(),
         jwt_access_expiry: 900,
         jwt_refresh_expiry: 604800,
-        // Port 9999 — tidak ada server SMTP di sini, email tidak benar-benar dikirim
         smtp_host: "127.0.0.1".to_string(),
         smtp_port: 9999,
         smtp_username: "test@test.com".to_string(),
@@ -53,12 +52,10 @@ impl TestApp {
     pub async fn new() -> Self {
         let db = TestDb::new().await;
 
-        // Buat URL dengan schema test
         let base_url = std::env::var("DATABASE_URL").expect("DATABASE_URL harus ada di .env.test");
         let schema_url = format!("{}?options=-csearch_path%3D\"{}\"", base_url, db.schema);
         let config = test_config(&schema_url);
 
-        // Pool yang mengarah ke schema test
         let test_pool = PgPoolOptions::new()
             .max_connections(5)
             .connect(&schema_url)
@@ -72,21 +69,19 @@ impl TestApp {
             config.jwt_refresh_expiry,
         ));
 
-        // EmailService dengan SMTP dummy — init akan sukses, pengiriman gagal saat runtime
-        // karena test server spawn email di background task (tokio::spawn), kegagalan ini
-        // tidak crash handler, hanya log error
+        // Minimal dummy state for ZohoMailer
         let zoho_state: SharedZoho = Arc::new(Mutex::new(ZohoData {
             access_token: "".into(),
-            refresh_token: config.zoho_refresh_token.clone(),
-            client_id: config.client_id.clone(),
-            client_secret: config.client_secret.clone(),
-            api_domain: "https://www.zohoapis.com".into(),
+            refresh_token: "test".into(),
+            client_id: "test".into(),
+            client_secret: "test".into(),
+            api_domain: "http://localhost".into(),
             token_type: "Bearer".into(),
             expires_in: 3600,
-            account_id: config.account_id.clone(),
+            account_id: "test".into(),
         }));
 
-        let email = Arc::new(ZohoMailer::new(zoho_state).expect("Gagal init EmailService"));
+        let email = Arc::new(ZohoMailer::new(zoho_state).unwrap());
 
         let state = AppState {
             db: test_pool,

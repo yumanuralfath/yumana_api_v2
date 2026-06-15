@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// Extract Bearer token from Authorization header
-fn extract_bearer_token(req: &Request) -> Option<String> {
+pub fn extract_bearer_token(req: &Request) -> Option<String> {
     req.headers()
         .get(header::AUTHORIZATION)
         .and_then(|val| val.to_str().ok())

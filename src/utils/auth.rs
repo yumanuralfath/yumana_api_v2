@@ -34,10 +34,10 @@ pub async fn get_second_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::
         LIMIT 1 OFFSET 1
         "#
     )
-    .fetch_optional(db) // Gunakan fetch_optional karena baris kedua mungkin tidak ada
+    .fetch_optional(db)
     .await
     .map_err(AppError::DatabaseError)?
-    .expect("yeagh");
+    .flatten();
 
     Ok(result)
 }

@@ -28,7 +28,6 @@ async fn test_register_success() {
     assert!(body["data"]["user"]["id"].is_string());
     assert_eq!(body["data"]["user"]["email"], "newuser@test.com");
     assert_eq!(body["data"]["user"]["is_verified"], false); // belum verifikasi email
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -55,8 +54,6 @@ async fn test_register_duplicate_email() {
             .to_lowercase()
             .contains("email")
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -83,8 +80,6 @@ async fn test_register_duplicate_username() {
             .to_lowercase()
             .contains("username")
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -102,8 +97,6 @@ async fn test_register_invalid_email() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -121,8 +114,6 @@ async fn test_register_password_too_short() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -140,8 +131,6 @@ async fn test_register_username_too_short() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -160,8 +149,8 @@ async fn test_verify_email_success() {
         .await;
 
     assert_eq!(res.status_code(), 200);
-    let body: Value = res.json();
-    assert_eq!(body["success"], true);
+    let html = res.text();
+    assert!(html.contains("Verifikasi Berhasil"));
 
     // Pastikan user sekarang terverifikasi di DB
     let is_verified: bool = sqlx::query_scalar("SELECT is_verified FROM users WHERE id = $1")
@@ -171,8 +160,6 @@ async fn test_verify_email_success() {
         .unwrap();
 
     assert!(is_verified, "User harus terverifikasi setelah klik link");
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -184,9 +171,9 @@ async fn test_verify_email_invalid_token() {
         .get("/api/auth/verify-email?token=tokenpalsu123")
         .await;
 
-    assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
+    assert_eq!(res.status_code(), 200); // UI result page is 200
+    let html = res.text();
+    assert!(html.contains("Link Tidak Valid"));
 }
 
 #[tokio::test]
@@ -200,17 +187,9 @@ async fn test_verify_email_expired_token() {
         .get(&format!("/api/auth/verify-email?token={}", token))
         .await;
 
-    assert_eq!(res.status_code(), 400);
-    let body: Value = res.json();
-    assert!(
-        body["error"]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("expired")
-    );
-
-    app.db.cleanup().await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("Link Kadaluarsa"));
 }
 
 #[tokio::test]
@@ -224,28 +203,15 @@ async fn test_verify_email_token_already_used() {
         .get(&format!("/api/auth/verify-email?token={}", token))
         .await;
 
-    // Pakai kedua kali — gagal
+    // Pakai kedua kali — tetap 200 tapi pesan "Sudah Terverifikasi"
     let res = app
         .server
         .get(&format!("/api/auth/verify-email?token={}", token))
         .await;
 
-    assert_eq!(res.status_code(), 400);
-    let body: Value = res.json();
-    assert!(
-        body["error"]
-            .as_str()
-            .unwrap()
-            .to_lowercase()
-            .contains("used")
-            || body["error"]
-                .as_str()
-                .unwrap()
-                .to_lowercase()
-                .contains("already")
-    );
-
-    app.db.cleanup().await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("Sudah Terverifikasi"));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -273,8 +239,6 @@ async fn test_login_success() {
     assert!(body["data"]["refresh_token"].is_string());
     assert_eq!(body["data"]["token_type"], "Bearer");
     assert_eq!(body["data"]["user"]["email"], user.email);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -292,8 +256,6 @@ async fn test_login_wrong_password() {
         .await;
 
     assert_eq!(res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -310,8 +272,6 @@ async fn test_login_email_not_found() {
         .await;
 
     assert_eq!(res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -337,8 +297,6 @@ async fn test_login_unverified_user() {
             .to_lowercase()
             .contains("verify")
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -364,8 +322,6 @@ async fn test_login_inactive_user() {
             .to_lowercase()
             .contains("deactivated")
     );
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -407,8 +363,6 @@ async fn test_refresh_token_success() {
     // Pastikan format token valid
     assert!(body["data"]["access_token"].is_string());
     assert!(body["data"]["refresh_token"].is_string());
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -451,8 +405,6 @@ async fn test_refresh_token_reuse_revoked() {
                 .to_lowercase()
                 .contains("invalid")
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -466,8 +418,6 @@ async fn test_refresh_token_invalid() {
         .await;
 
     assert_eq!(res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -504,8 +454,6 @@ async fn test_logout_success() {
         .await;
 
     assert_eq!(refresh_res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -535,8 +483,6 @@ async fn test_forgot_password_known_email() {
         .unwrap();
 
     assert_eq!(count, 1, "Reset token harus tersimpan di DB");
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -551,8 +497,6 @@ async fn test_forgot_password_unknown_email() {
 
     // Tetap 200 — tidak boleh reveal apakah email ada
     assert_eq!(res.status_code(), 200);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -566,8 +510,6 @@ async fn test_forgot_password_invalid_email_format() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -606,8 +548,6 @@ async fn test_reset_password_success() {
         200,
         "Login dengan password baru harus berhasil"
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -646,8 +586,6 @@ async fn test_reset_password_revokes_sessions() {
         401,
         "Semua sesi lama harus direvoke setelah reset password"
     );
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -661,8 +599,6 @@ async fn test_reset_password_invalid_token() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -678,8 +614,6 @@ async fn test_reset_password_too_short() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -713,8 +647,6 @@ async fn test_me_authenticated() {
     assert_eq!(body["data"]["username"], user.username);
     // Password tidak boleh bocor
     assert!(body["data"]["password_hash"].is_null() || body["data"].get("password_hash").is_none());
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -723,8 +655,6 @@ async fn test_me_without_token() {
 
     let res = app.server.get("/api/auth/me").await;
     assert_eq!(res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 #[tokio::test]
@@ -739,8 +669,6 @@ async fn test_me_invalid_token() {
         .await;
 
     assert_eq!(res.status_code(), 401);
-
-    app.db.cleanup().await;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -751,11 +679,9 @@ async fn test_me_invalid_token() {
 async fn test_health_check() {
     let app = TestApp::new().await;
 
-    let res = app.server.get("/health").await;
+    let res = app.server.get("/api/auth/health").await;
     assert_eq!(res.status_code(), 200);
 
     let body: Value = res.json();
-    assert_eq!(body["status"], "ok");
-
-    app.db.cleanup().await;
+    assert_eq!(body["data"]["status"], "OK");
 }
