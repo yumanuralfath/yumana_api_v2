@@ -25,6 +25,7 @@ RUN cargo build --release 2>/dev/null; \
 # Build actual app
 COPY src ./src
 COPY migrations ./migrations
+COPY templates ./templates
 
 RUN cargo build --release
 
@@ -39,8 +40,6 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY --from=builder /app/target/release/yumana_api_v2 .
-
-COPY templates ./templates
 
 # Railway injects PORT env variable
 EXPOSE 8080

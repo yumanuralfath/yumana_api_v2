@@ -1,22 +1,36 @@
 use crate::{config::Config, services::mailer::SharedZoho};
+use askama::Template;
 use reqwest::Client;
-use tera::Tera;
 use tracing::{error, info};
+
+#[derive(Template)]
+#[template(path = "mail_verify.html")]
+struct VerifyEmailTemplate<'a> {
+    username: &'a str,
+    verify_url: &'a str,
+    app_name: &'a str,
+    subject: &'a str,
+}
+
+#[derive(Template)]
+#[template(path = "mail_reset_password.html")]
+struct ResetPasswordTemplate<'a> {
+    username: &'a str,
+    reset_url: &'a str,
+    app_name: &'a str,
+    subject: &'a str,
+}
 
 pub struct ZohoMailer {
     client: Client,
-    tera: Tera,
     pub state: SharedZoho,
     config: Config,
 }
 
 impl ZohoMailer {
     pub fn new(state: SharedZoho) -> Result<Self, Box<dyn std::error::Error>> {
-        let tera = Tera::new(concat!(env!("CARGO_MANIFEST_DIR"), "/templates/**/*"))?;
-
         Ok(Self {
             client: Client::new(),
-            tera,
             config: Config::from_env()?,
             state,
         })
@@ -79,25 +93,20 @@ impl ZohoMailer {
             self.config.app_url, token
         );
 
-        let mut context = tera::Context::new();
-        context.insert("username", username);
-        context.insert("verify_url", &verify_url);
-        context.insert("app_name", &self.config.smtp_from_name);
+        let subject = format!("Verifikasi Email - {}", self.config.smtp_from_name);
+        let template = VerifyEmailTemplate {
+            username,
+            verify_url: &verify_url,
+            app_name: &self.config.smtp_from_name,
+            subject: &subject,
+        };
 
-        let html = self
-            .tera
-            .render("mail_verify.html", &context)
-            .map_err(|e| {
-                error!("Failed to render verification email template: {:?}", e);
-                e
-            })?;
+        let html = template.render().map_err(|e| {
+            error!("Failed to render verification email template: {:?}", e);
+            e
+        })?;
 
-        self.send_email(
-            to_email,
-            &format!("Verifikasi Email - {}", self.config.smtp_from_name),
-            html,
-        )
-        .await
+        self.send_email(to_email, &subject, html).await
     }
 
     pub async fn send_password_reset_email(
@@ -110,20 +119,21 @@ impl ZohoMailer {
             "{}/reset-password?token={}",
             self.config.frontend_url, token
         );
-        let mut context = tera::Context::new();
-        context.insert("username", username);
-        context.insert("reset_url", &reset_url);
-        context.insert("app_name", &self.config.smtp_from_name);
-        context.insert("subject", "Reset Password");
 
-        let html = self.tera.render("mail_reset_password.html", &context)?;
+        let subject = format!("Reset Password - {}", self.config.smtp_from_name);
+        let template = ResetPasswordTemplate {
+            username,
+            reset_url: &reset_url,
+            app_name: &self.config.smtp_from_name,
+            subject: &subject,
+        };
 
-        self.send_email(
-            to_email,
-            &format!("Reset Password - {}", self.config.smtp_from_name),
-            html,
-        )
-        .await
+        let html = template.render().map_err(|e| {
+            error!("Failed to render password reset template: {:?}", e);
+            e
+        })?;
+
+        self.send_email(to_email, &subject, html).await
     }
 }
 
