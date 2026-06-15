@@ -8,18 +8,18 @@ use crate::integrattion::helpers::app::TestApp;
 pub struct TestDb {
     pub pool: PgPool,
     pub schema: String,
-    /// Pool ke DB utama (untuk DROP SCHEMA saat cleanup)
-    root_pool: PgPool,
 }
 
 impl TestDb {
     /// Buat schema baru, jalankan migrasi, kembalikan TestDb
     pub async fn new() -> Self {
-        // Load .env.test
-        dotenvy::from_filename(".env.test").ok();
+        // Gunakan .env utama
         dotenvy::dotenv().ok();
 
-        let base_url = std::env::var("DATABASE_URL").expect("DATABASE_URL harus ada di .env.test");
+        let base_url = std::env::var("DATABASE_URL")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .expect("DATABASE_URL harus ada di .env dan tidak boleh kosong");
 
         // Connect ke root DB untuk buat/hapus schema
         let root_pool = PgPoolOptions::new()
@@ -48,7 +48,6 @@ impl TestDb {
         let db = Self {
             pool,
             schema,
-            root_pool,
         };
         db.run_migrations().await;
         db
@@ -134,25 +133,33 @@ impl TestDb {
 impl Drop for TestDb {
     fn drop(&mut self) {
         let schema = self.schema.clone();
-        let root_pool = self.root_pool.clone();
+        let base_url = std::env::var("DATABASE_URL").unwrap_or_default();
 
-        // Gunakan blocking call di dalam drop untuk memastikan schema terhapus
-        // meskipun test panic.
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
-                    .execute(&root_pool)
-                    .await;
-            });
-        } else {
-            // Jika tidak ada runtime, buat runtime baru sebentar (fallback)
-            let rt = tokio::runtime::Runtime::new().unwrap();
-            rt.block_on(async {
-                let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
-                    .execute(&root_pool)
-                    .await;
-            });
+        if base_url.is_empty() {
+            return;
         }
+
+        // Gunakan thread terpisah agar bisa block_on tanpa konflik dengan runtime yang sedang berjalan
+        let _ = std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+
+            rt.block_on(async {
+                // Buat koneksi baru khusus untuk cleanup
+                if let Ok(pool) = sqlx::postgres::PgPoolOptions::new()
+                    .max_connections(1)
+                    .connect(&base_url)
+                    .await
+                {
+                    let _ = sqlx::query(&format!("DROP SCHEMA \"{}\" CASCADE", schema))
+                        .execute(&pool)
+                        .await;
+                }
+            });
+        })
+        .join();
     }
 }
 
