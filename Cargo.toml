@@ -27,12 +27,6 @@ jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
 # Password hashing
 argon2 = "0.5"
 
-# Email (SMTP)
-lettre = { version = "0.11", features = [
-  "tokio1-native-tls",
-  "smtp-transport",
-  "builder",
-], default-features = false }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
