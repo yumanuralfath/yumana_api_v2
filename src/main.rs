@@ -2,8 +2,9 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::{Level, info};
 
 use yumana_api_v2::{
-    AppState, Config, create_router,
+    AppState, Config,
     bootstrap::{init_cors, init_tracing_env},
+    create_router,
 };
 
 #[tokio::main]
@@ -11,6 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing_env();
 
     let config = Config::from_env()?;
+    info!("Running in {} mode", config.env);
     info!(
         "Starting {} on {}:{}",
         env!("CARGO_PKG_NAME"),
@@ -18,7 +20,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.port
     );
 
-    // Inisialisasi app state lengkap secara terenkapsulasi
     let app_state = AppState::new(config.clone()).await?;
 
     let app = create_router(app_state)

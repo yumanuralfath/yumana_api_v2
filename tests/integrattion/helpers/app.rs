@@ -17,6 +17,7 @@ use super::db::TestDb;
 /// Config test — semua value hardcode
 pub fn test_config(database_url: &str) -> Config {
     Config {
+        env: yumana_api_v2::AppEnv::Release,
         domain_url: Some("test_website.com".to_string()),
         host: "127.0.0.1".to_string(),
         port: 8080,

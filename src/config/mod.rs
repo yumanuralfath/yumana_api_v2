@@ -1,8 +1,25 @@
 pub mod state;
 use std::env;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AppEnv {
+    Debug,
+    Release,
+}
+
+impl std::fmt::Display for AppEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AppEnv::Debug => write!(f, "debug"),
+            AppEnv::Release => write!(f, "release"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
+    pub env: AppEnv,
     pub host: String,
     pub port: u16,
     pub database_url: String,
@@ -30,6 +47,18 @@ impl Config {
     pub fn from_env() -> Result<Self, Box<dyn std::error::Error>> {
         let domain_url = env::var("DOMAIN_URL").ok();
 
+        let app_env = match env::var("APP_ENV").ok().as_deref() {
+            Some("release") | Some("production") => AppEnv::Release,
+            Some("debug") | Some("development") => AppEnv::Debug,
+            _ => {
+                if cfg!(debug_assertions) {
+                    AppEnv::Debug
+                } else {
+                    AppEnv::Release
+                }
+            }
+        };
+
         let database_url = if cfg!(debug_assertions) {
             env::var("DATABASE_URL_DEV").or_else(|_| env::var("DATABASE_URL"))?
         } else {
@@ -54,6 +83,7 @@ impl Config {
             env::var("FRONTEND_URL").unwrap_or_else(|_| "http://localhost:3000".to_string())
         };
         Ok(Config {
+            env: app_env,
             domain_url,
             host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             port: env::var("PORT")

@@ -7,5 +7,5 @@ pub mod routes;
 pub mod services;
 pub mod utils;
 
-pub use crate::config::{Config, state::AppState};
+pub use crate::config::{Config, AppEnv, state::AppState};
 pub use crate::routes::create_router;

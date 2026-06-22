@@ -136,48 +136,57 @@ pub async fn register(
     let password_hash = hash_password(&body.password)?;
 
     // Create user
+    let is_debug = state.config.env == crate::config::AppEnv::Debug;
+
     let user = sqlx::query_as!(
         crate::models::user::User,
-        r#"INSERT INTO users (email, username, password_hash)
-           VALUES ($1, $2, $3)
+        r#"INSERT INTO users (email, username, password_hash, is_verified)
+           VALUES ($1, $2, $3, $4)
            RETURNING id, email, username, password_hash,
                      role as "role: _", is_verified, is_active, created_at, updated_at"#,
         body.email.to_lowercase(),
         body.username.to_lowercase(),
-        password_hash
+        password_hash,
+        is_debug
     )
     .fetch_one(&state.db)
     .await?;
 
-    // Create verification token (expires 24h)
-    let token = generate_secure_token(64);
-    let expires_at = OffsetDateTime::now_utc() + Duration::hours(24);
+    let message = if is_debug {
+        "Registration successful! Your account is active (Debug Mode)."
+    } else {
+        // Create verification token (expires 24h)
+        let token = generate_secure_token(64);
+        let expires_at = OffsetDateTime::now_utc() + Duration::hours(24);
 
-    sqlx::query!(
-        "INSERT INTO email_verifications (user_id, token, expires_at) VALUES ($1, $2, $3)",
-        user.id,
-        token,
-        expires_at
-    )
-    .execute(&state.db)
-    .await?;
+        sqlx::query!(
+            "INSERT INTO email_verifications (user_id, token, expires_at) VALUES ($1, $2, $3)",
+            user.id,
+            token,
+            expires_at
+        )
+        .execute(&state.db)
+        .await?;
 
-    // Send verification email (non-blocking, don't fail if email fails)
-    let email_service = state.email.clone();
-    let email = user.email.clone();
-    let username = user.username.clone();
-    let tkn = token.clone();
-    tokio::spawn(async move {
-        if let Err(e) = email_service
-            .send_verification_email(&email, &username, &tkn)
-            .await
-        {
-            tracing::error!("Failed to send verification email: {:?}", e);
-        }
-    });
+        // Send verification email (non-blocking, don't fail if email fails)
+        let email_service = state.email.clone();
+        let email = user.email.clone();
+        let username = user.username.clone();
+        let tkn = token.clone();
+        tokio::spawn(async move {
+            if let Err(e) = email_service
+                .send_verification_email(&email, &username, &tkn)
+                .await
+            {
+                tracing::error!("Failed to send verification email: {:?}", e);
+            }
+        });
+
+        "Registration successful! Please check your email to verify your account."
+    };
 
     Ok(success(serde_json::json!({
-        "message": "Registration successful! Please check your email to verify your account.",
+        "message": message,
         "user": UserResponse::from(user)
     })))
 }

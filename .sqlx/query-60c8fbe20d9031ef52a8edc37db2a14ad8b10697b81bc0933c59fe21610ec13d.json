@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (email, username, password_hash)\n           VALUES ($1, $2, $3)\n           RETURNING id, email, username, password_hash,\n                     role as \"role: _\", is_verified, is_active, created_at, updated_at",
+  "query": "INSERT INTO users (email, username, password_hash, is_verified)\n           VALUES ($1, $2, $3, $4)\n           RETURNING id, email, username, password_hash,\n                     role as \"role: _\", is_verified, is_active, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -63,7 +63,8 @@
       "Left": [
         "Varchar",
         "Varchar",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -78,5 +79,5 @@
       false
     ]
   },
-  "hash": "9e0c994c31cad3dd5b876a34a2c401850cf7d7e2cf02218cc076863b366758d0"
+  "hash": "60c8fbe20d9031ef52a8edc37db2a14ad8b10697b81bc0933c59fe21610ec13d"
 }
