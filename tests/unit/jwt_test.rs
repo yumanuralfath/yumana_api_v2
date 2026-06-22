@@ -220,3 +220,20 @@ fn test_expired_token_rejected() {
     let result = jwt.verify_access_token(&token);
     assert!(result.is_err(), "Token expired harus ditolak");
 }
+
+#[test]
+fn test_expired_refresh_token_rejected() {
+    let jwt = JwtService::new(
+        "test-access-secret-panjang-sekali-harus-32-char-min".to_string(),
+        "test-refresh-secret-panjang-sekali-harus-32-char-min".to_string(),
+        900,
+        -300, // Langsung expired
+    );
+
+    let token = jwt
+        .generate_refresh_token(Uuid::new_v4(), &Uuid::new_v4().to_string())
+        .unwrap();
+    let result = jwt.verify_refresh_token(&token);
+    assert!(result.is_err(), "Refresh token expired harus ditolak");
+}
+
