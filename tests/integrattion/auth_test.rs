@@ -4,13 +4,13 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 // ═══════════════════════════════════════════════════════════════
-// REGISTER
+// REGISTER FLOWS
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_register_success() {
+async fn test_register_flow() {
     let app = TestApp::new().await;
 
+    // 1. Success case
     let res = app
         .server
         .post("/api/auth/register")
@@ -22,25 +22,19 @@ async fn test_register_success() {
         .await;
 
     assert_eq!(res.status_code(), 200);
-
     let body: Value = res.json();
     assert_eq!(body["success"], true);
     assert!(body["data"]["user"]["id"].is_string());
     assert_eq!(body["data"]["user"]["email"], "newuser@test.com");
     assert_eq!(body["data"]["user"]["is_verified"], false); // belum verifikasi email
-}
 
-#[tokio::test]
-async fn test_register_duplicate_email() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
+    // 2. Duplicate email case (using same email as register success)
     let res = app
         .server
         .post("/api/auth/register")
         .json(&json!({
             "username": "otherusername",
-            "email": user.email,
+            "email": "newuser@test.com",
             "password": "Password123!"
         }))
         .await;
@@ -54,18 +48,13 @@ async fn test_register_duplicate_email() {
             .to_lowercase()
             .contains("email")
     );
-}
 
-#[tokio::test]
-async fn test_register_duplicate_username() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
+    // 3. Duplicate username case (using same username as register success)
     let res = app
         .server
         .post("/api/auth/register")
         .json(&json!({
-            "username": user.username,
+            "username": "newuser",
             "email": "different@test.com",
             "password": "Password123!"
         }))
@@ -80,12 +69,8 @@ async fn test_register_duplicate_username() {
             .to_lowercase()
             .contains("username")
     );
-}
 
-#[tokio::test]
-async fn test_register_invalid_email() {
-    let app = TestApp::new().await;
-
+    // 4. Invalid email case
     let res = app
         .server
         .post("/api/auth/register")
@@ -97,12 +82,8 @@ async fn test_register_invalid_email() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-}
 
-#[tokio::test]
-async fn test_register_password_too_short() {
-    let app = TestApp::new().await;
-
+    // 5. Password too short
     let res = app
         .server
         .post("/api/auth/register")
@@ -114,12 +95,8 @@ async fn test_register_password_too_short() {
         .await;
 
     assert_eq!(res.status_code(), 400);
-}
 
-#[tokio::test]
-async fn test_register_username_too_short() {
-    let app = TestApp::new().await;
-
+    // 6. Username too short
     let res = app
         .server
         .post("/api/auth/register")
@@ -134,12 +111,13 @@ async fn test_register_username_too_short() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// VERIFY EMAIL
+// VERIFY EMAIL FLOWS
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_verify_email_success() {
+async fn test_verify_email_flow() {
     let app = TestApp::new().await;
+
+    // 1. Success case
     let user = create_unverified_user(&app.db.pool).await;
     let token = create_verification_token(&app.db.pool, user.id).await;
 
@@ -158,52 +136,9 @@ async fn test_verify_email_success() {
         .fetch_one(&app.db.pool)
         .await
         .unwrap();
-
     assert!(is_verified, "User harus terverifikasi setelah klik link");
-}
 
-#[tokio::test]
-async fn test_verify_email_invalid_token() {
-    let app = TestApp::new().await;
-
-    let res = app
-        .server
-        .get("/api/auth/verify-email?token=tokenpalsu123")
-        .await;
-
-    assert_eq!(res.status_code(), 200); // UI result page is 200
-    let html = res.text();
-    assert!(html.contains("Link Tidak Valid"));
-}
-
-#[tokio::test]
-async fn test_verify_email_expired_token() {
-    let app = TestApp::new().await;
-    let user = create_unverified_user(&app.db.pool).await;
-    let token = create_expired_verification_token(&app.db.pool, user.id).await;
-
-    let res = app
-        .server
-        .get(&format!("/api/auth/verify-email?token={}", token))
-        .await;
-
-    assert_eq!(res.status_code(), 200);
-    let html = res.text();
-    assert!(html.contains("Link Kadaluarsa"));
-}
-
-#[tokio::test]
-async fn test_verify_email_token_already_used() {
-    let app = TestApp::new().await;
-    let user = create_unverified_user(&app.db.pool).await;
-    let token = create_verification_token(&app.db.pool, user.id).await;
-
-    // Pakai pertama kali — sukses
-    app.server
-        .get(&format!("/api/auth/verify-email?token={}", token))
-        .await;
-
-    // Pakai kedua kali — tetap 200 tapi pesan "Sudah Terverifikasi"
+    // 2. Token already used case (using same token)
     let res = app
         .server
         .get(&format!("/api/auth/verify-email?token={}", token))
@@ -212,17 +147,40 @@ async fn test_verify_email_token_already_used() {
     assert_eq!(res.status_code(), 200);
     let html = res.text();
     assert!(html.contains("Sudah Terverifikasi"));
+
+    // 3. Invalid token case
+    let res = app
+        .server
+        .get("/api/auth/verify-email?token=tokenpalsu123")
+        .await;
+
+    assert_eq!(res.status_code(), 200); // UI result page is 200
+    let html = res.text();
+    assert!(html.contains("Link Tidak Valid"));
+
+    // 4. Expired token case
+    let user_exp = create_unverified_user(&app.db.pool).await;
+    let token_exp = create_expired_verification_token(&app.db.pool, user_exp.id).await;
+
+    let res = app
+        .server
+        .get(&format!("/api/auth/verify-email?token={}", token_exp))
+        .await;
+
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("Link Kadaluarsa"));
 }
 
 // ═══════════════════════════════════════════════════════════════
-// LOGIN
+// LOGIN FLOWS
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_login_success() {
+async fn test_login_flow() {
     let app = TestApp::new().await;
     let user = create_verified_user(&app.db.pool).await;
 
+    // 1. Success login
     let res = app
         .server
         .post("/api/auth/login")
@@ -239,13 +197,8 @@ async fn test_login_success() {
     assert!(body["data"]["refresh_token"].is_string());
     assert_eq!(body["data"]["token_type"], "Bearer");
     assert_eq!(body["data"]["user"]["email"], user.email);
-}
 
-#[tokio::test]
-async fn test_login_wrong_password() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
+    // 2. Wrong password
     let res = app
         .server
         .post("/api/auth/login")
@@ -254,14 +207,9 @@ async fn test_login_wrong_password() {
             "password": "WrongPassword!"
         }))
         .await;
-
     assert_eq!(res.status_code(), 401);
-}
 
-#[tokio::test]
-async fn test_login_email_not_found() {
-    let app = TestApp::new().await;
-
+    // 3. Email not found
     let res = app
         .server
         .post("/api/auth/login")
@@ -270,21 +218,16 @@ async fn test_login_email_not_found() {
             "password": "Password123!"
         }))
         .await;
-
     assert_eq!(res.status_code(), 401);
-}
 
-#[tokio::test]
-async fn test_login_unverified_user() {
-    let app = TestApp::new().await;
-    let user = create_unverified_user(&app.db.pool).await;
-
+    // 4. Unverified user
+    let user_unverified = create_unverified_user(&app.db.pool).await;
     let res = app
         .server
         .post("/api/auth/login")
         .json(&json!({
-            "email": user.email,
-            "password": user.password
+            "email": user_unverified.email,
+            "password": user_unverified.password
         }))
         .await;
 
@@ -297,19 +240,15 @@ async fn test_login_unverified_user() {
             .to_lowercase()
             .contains("verify")
     );
-}
 
-#[tokio::test]
-async fn test_login_inactive_user() {
-    let app = TestApp::new().await;
-    let user = create_inactive_user(&app.db.pool).await;
-
+    // 5. Inactive user
+    let user_inactive = create_inactive_user(&app.db.pool).await;
     let res = app
         .server
         .post("/api/auth/login")
         .json(&json!({
-            "email": user.email,
-            "password": user.password
+            "email": user_inactive.email,
+            "password": user_inactive.password
         }))
         .await;
 
@@ -325,28 +264,25 @@ async fn test_login_inactive_user() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// REFRESH TOKEN
+// REFRESH & LOGOUT FLOWS
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_refresh_token_success() {
+async fn test_refresh_and_logout_flow() {
     let app = TestApp::new().await;
     let user = create_verified_user(&app.db.pool).await;
 
-    // Login untuk dapat refresh token
+    // 1. Success login
     let login_res = app
         .server
         .post("/api/auth/login")
         .json(&json!({"email": user.email, "password": user.password}))
         .await;
     let login_body: Value = login_res.json();
-    let old_refresh = login_body["data"]["refresh_token"].as_str().unwrap();
-    let old_access = login_body["data"]["access_token"].as_str().unwrap();
+    let old_refresh = login_body["data"]["refresh_token"].as_str().unwrap().to_string();
+    let old_access = login_body["data"]["access_token"].as_str().unwrap().to_string();
 
-    // Generate new jti
+    // 2. Success refresh
     let new_jti = Uuid::new_v4().to_string();
-
-    // Refresh token
     let res = app
         .server
         .post("/api/auth/refresh")
@@ -355,40 +291,15 @@ async fn test_refresh_token_success() {
 
     assert_eq!(res.status_code(), 200);
     let body: Value = res.json();
-
-    // Pastikan token baru berbeda dari yang lama
+    let new_refresh = body["data"]["refresh_token"].as_str().unwrap().to_string();
     assert_ne!(body["data"]["access_token"].as_str().unwrap(), old_access);
-    assert_ne!(body["data"]["refresh_token"].as_str().unwrap(), old_refresh);
+    assert_ne!(new_refresh, old_refresh);
 
-    // Pastikan format token valid
-    assert!(body["data"]["access_token"].is_string());
-    assert!(body["data"]["refresh_token"].is_string());
-}
-
-#[tokio::test]
-async fn test_refresh_token_reuse_revoked() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
-    let login_res = app
-        .server
-        .post("/api/auth/login")
-        .json(&json!({"email": user.email, "password": user.password}))
-        .await;
-    let login_body: Value = login_res.json();
-    let refresh_token = login_body["data"]["refresh_token"].as_str().unwrap();
-
-    // Refresh pertama — sukses, token lama direvoke
-    app.server
-        .post("/api/auth/refresh")
-        .json(&json!({"refresh_token": refresh_token}))
-        .await;
-
-    // Coba pakai token lama lagi — harus ditolak
+    // 3. Reuse revoked token (old_refresh has been replaced, so it is revoked)
     let res = app
         .server
         .post("/api/auth/refresh")
-        .json(&json!({"refresh_token": refresh_token}))
+        .json(&json!({"refresh_token": old_refresh}))
         .await;
 
     assert_eq!(res.status_code(), 401);
@@ -405,135 +316,102 @@ async fn test_refresh_token_reuse_revoked() {
                 .to_lowercase()
                 .contains("invalid")
     );
-}
 
-#[tokio::test]
-async fn test_refresh_token_invalid() {
-    let app = TestApp::new().await;
-
+    // 4. Invalid token format
     let res = app
         .server
         .post("/api/auth/refresh")
         .json(&json!({"refresh_token": "token.palsu.sekali"}))
         .await;
-
     assert_eq!(res.status_code(), 401);
-}
 
-// ═══════════════════════════════════════════════════════════════
-// LOGOUT
-// ═══════════════════════════════════════════════════════════════
-
-#[tokio::test]
-async fn test_logout_success() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
-    let login_res = app
-        .server
-        .post("/api/auth/login")
-        .json(&json!({"email": user.email, "password": user.password}))
-        .await;
-    let login_body: Value = login_res.json();
-    let refresh_token = login_body["data"]["refresh_token"].as_str().unwrap();
-
-    // Logout
+    // 5. Success logout (using the active new_refresh token)
     let res = app
         .server
         .post("/api/auth/logout")
-        .json(&json!({"refresh_token": refresh_token}))
+        .json(&json!({"refresh_token": new_refresh}))
         .await;
-
     assert_eq!(res.status_code(), 200);
 
-    // Coba refresh setelah logout — harus gagal
+    // 6. Refresh after logout should fail
     let refresh_res = app
         .server
         .post("/api/auth/refresh")
-        .json(&json!({"refresh_token": refresh_token}))
+        .json(&json!({"refresh_token": new_refresh}))
         .await;
-
     assert_eq!(refresh_res.status_code(), 401);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// FORGOT PASSWORD
+// FORGOT & RESET PASSWORD FLOWS
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_forgot_password_known_email() {
+async fn test_forgot_and_reset_password_flow() {
     let app = TestApp::new().await;
     let user = create_verified_user(&app.db.pool).await;
 
+    // 1. Forgot password known email
     let res = app
         .server
         .post("/api/auth/forgot-password")
         .json(&json!({"email": user.email}))
         .await;
-
-    // Selalu 200 (anti-enumeration)
     assert_eq!(res.status_code(), 200);
     assert_eq!(res.json::<Value>()["success"], true);
 
-    // Pastikan token tersimpan di DB
     let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM password_resets WHERE user_id = $1")
         .bind(user.id)
         .fetch_one(&app.db.pool)
         .await
         .unwrap();
-
     assert_eq!(count, 1, "Reset token harus tersimpan di DB");
-}
 
-#[tokio::test]
-async fn test_forgot_password_unknown_email() {
-    let app = TestApp::new().await;
-
+    // 2. Forgot password unknown email (anti-enumeration: still 200)
     let res = app
         .server
         .post("/api/auth/forgot-password")
         .json(&json!({"email": "tidakada@test.com"}))
         .await;
-
-    // Tetap 200 — tidak boleh reveal apakah email ada
     assert_eq!(res.status_code(), 200);
-}
 
-#[tokio::test]
-async fn test_forgot_password_invalid_email_format() {
-    let app = TestApp::new().await;
-
+    // 3. Forgot password invalid email format
     let res = app
         .server
         .post("/api/auth/forgot-password")
         .json(&json!({"email": "bukan-email"}))
         .await;
-
     assert_eq!(res.status_code(), 400);
-}
 
-// ═══════════════════════════════════════════════════════════════
-// RESET PASSWORD
-// ═══════════════════════════════════════════════════════════════
+    // 4. Reset password - invalid token
+    let res = app
+        .server
+        .post("/api/auth/reset-password")
+        .json(&json!({"token": "tokenpalsu", "new_password": "NewPassword456!"}))
+        .await;
+    assert_eq!(res.status_code(), 400);
 
-#[tokio::test]
-async fn test_reset_password_success() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
+    // 5. Reset password - too short
     let token = create_reset_token(&app.db.pool, user.id).await;
+    let res = app
+        .server
+        .post("/api/auth/reset-password")
+        .json(&json!({"token": token, "new_password": "short"}))
+        .await;
+    assert_eq!(res.status_code(), 400);
 
+    // 6. Reset password success
+    let token2 = create_reset_token(&app.db.pool, user.id).await;
     let res = app
         .server
         .post("/api/auth/reset-password")
         .json(&json!({
-            "token": token,
+            "token": token2,
             "new_password": "NewPassword456!"
         }))
         .await;
-
     assert_eq!(res.status_code(), 200);
 
-    // Login dengan password baru harus sukses
+    // 7. Login with new password success
     let login_res = app
         .server
         .post("/api/auth/login")
@@ -542,89 +420,34 @@ async fn test_reset_password_success() {
             "password": "NewPassword456!"
         }))
         .await;
+    assert_eq!(login_res.status_code(), 200);
+    let old_refresh = login_res.json::<Value>()["data"]["refresh_token"].as_str().unwrap().to_string();
 
-    assert_eq!(
-        login_res.status_code(),
-        200,
-        "Login dengan password baru harus berhasil"
-    );
-}
-
-#[tokio::test]
-async fn test_reset_password_revokes_sessions() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
-    // Login dulu untuk dapat refresh token aktif
-    let login_res = app
-        .server
-        .post("/api/auth/login")
-        .json(&json!({"email": user.email, "password": user.password}))
-        .await;
-    let old_refresh = login_res.json::<Value>()["data"]["refresh_token"]
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    let token = create_reset_token(&app.db.pool, user.id).await;
-
-    // Reset password
+    // 8. Reset password again should revoke all sessions
+    let token3 = create_reset_token(&app.db.pool, user.id).await;
     app.server
         .post("/api/auth/reset-password")
-        .json(&json!({"token": token, "new_password": "NewPassword456!"}))
+        .json(&json!({"token": token3, "new_password": "FinalPassword789!"}))
         .await;
 
-    // Refresh token lama harus direvoke
+    // Refresh with old token should fail now
     let res = app
         .server
         .post("/api/auth/refresh")
         .json(&json!({"refresh_token": old_refresh}))
         .await;
-
-    assert_eq!(
-        res.status_code(),
-        401,
-        "Semua sesi lama harus direvoke setelah reset password"
-    );
-}
-
-#[tokio::test]
-async fn test_reset_password_invalid_token() {
-    let app = TestApp::new().await;
-
-    let res = app
-        .server
-        .post("/api/auth/reset-password")
-        .json(&json!({"token": "tokenpalsu", "new_password": "NewPassword456!"}))
-        .await;
-
-    assert_eq!(res.status_code(), 400);
-}
-
-#[tokio::test]
-async fn test_reset_password_too_short() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-    let token = create_reset_token(&app.db.pool, user.id).await;
-
-    let res = app
-        .server
-        .post("/api/auth/reset-password")
-        .json(&json!({"token": token, "new_password": "short"}))
-        .await;
-
-    assert_eq!(res.status_code(), 400);
+    assert_eq!(res.status_code(), 401);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ME (current user)
+// CURRENT USER ME FLOWS & DEACTIVATION INVALIDATION
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
-async fn test_me_authenticated() {
+async fn test_me_flow() {
     let app = TestApp::new().await;
     let user = create_verified_user(&app.db.pool).await;
 
+    // 1. Get access token
     let login_res = app
         .server
         .post("/api/auth/login")
@@ -635,6 +458,7 @@ async fn test_me_authenticated() {
         .unwrap()
         .to_string();
 
+    // 2. Get /me authenticated
     let res = app
         .server
         .get("/api/auth/me")
@@ -645,36 +469,40 @@ async fn test_me_authenticated() {
     let body: Value = res.json();
     assert_eq!(body["data"]["email"], user.email);
     assert_eq!(body["data"]["username"], user.username);
-    // Password tidak boleh bocor
     assert!(body["data"]["password_hash"].is_null() || body["data"].get("password_hash").is_none());
-}
 
-#[tokio::test]
-async fn test_me_without_token() {
-    let app = TestApp::new().await;
-
+    // 3. Get /me without token
     let res = app.server.get("/api/auth/me").await;
     assert_eq!(res.status_code(), 401);
-}
 
-#[tokio::test]
-async fn test_me_invalid_token() {
-    let app = TestApp::new().await;
-    let invalid_bear_token = "BearerTokentidakvalid";
-
+    // 4. Get /me invalid token
     let res = app
         .server
         .get("/api/auth/me")
-        .add_header("Authorization", auth_header(invalid_bear_token))
+        .add_header("Authorization", auth_header("BearerTokentidakvalid"))
         .await;
-
     assert_eq!(res.status_code(), 401);
+
+    // 5. Deactivated user token invalidation test
+    // Nonaktifkan user di DB secara paksa
+    sqlx::query("UPDATE users SET is_active = false WHERE id = $1")
+        .bind(user.id)
+        .execute(&app.db.pool)
+        .await
+        .unwrap();
+
+    // Coba akses /me dengan token yang sebelumnya valid — harus 403
+    let res_after = app
+        .server
+        .get("/api/auth/me")
+        .add_header("Authorization", auth_header(&access_token))
+        .await;
+    assert_eq!(res_after.status_code(), 403);
 }
 
 // ═══════════════════════════════════════════════════════════════
 // HEALTH CHECK
 // ═══════════════════════════════════════════════════════════════
-
 #[tokio::test]
 async fn test_health_check() {
     let app = TestApp::new().await;
@@ -684,49 +512,4 @@ async fn test_health_check() {
 
     let body: Value = res.json();
     assert_eq!(body["data"]["status"], "OK");
-}
-
-#[tokio::test]
-async fn test_deactivated_user_token_invalidated() {
-    let app = TestApp::new().await;
-    let user = create_verified_user(&app.db.pool).await;
-
-    // 1. Login untuk dapat token
-    let login_res = app
-        .server
-        .post("/api/auth/login")
-        .json(&json!({"email": user.email, "password": user.password}))
-        .await;
-    let token = login_res.json::<Value>()["data"]["access_token"]
-        .as_str()
-        .unwrap()
-        .to_string();
-
-    // Pastikan awalnya bisa akses
-    let res_before = app
-        .server
-        .get("/api/auth/me")
-        .add_header("Authorization", auth_header(&token))
-        .await;
-    assert_eq!(res_before.status_code(), 200);
-
-    // 2. Nonaktifkan user secara paksa di DB
-    sqlx::query("UPDATE users SET is_active = false WHERE id = $1")
-        .bind(user.id)
-        .execute(&app.db.pool)
-        .await
-        .unwrap();
-
-    // 3. Coba akses lagi dengan token yang sama — HARUS GAGAL (403)
-    let res_after = app
-        .server
-        .get("/api/auth/me")
-        .add_header("Authorization", auth_header(&token))
-        .await;
-
-    assert_eq!(
-        res_after.status_code(),
-        403,
-        "User yang dinonaktifkan tidak boleh bisa akses API meskipun token belum expired"
-    );
 }
