@@ -5,12 +5,9 @@ use std::sync::{Arc, Mutex};
 use sqlx::postgres::PgPoolOptions;
 
 use yumana_api_v2::{
-    config::{Config, state::AppState},
-    routes::create_router,
-    services::{
-        jwt::JwtService,
-        mailer::{SharedZoho, ZohoData, method::ZohoMailer},
-    },
+    AppState, Config, create_router,
+    jwt::JwtService,
+    mailer::{SharedZoho, ZohoData, method::ZohoMailer},
 };
 
 use super::db::TestDb;

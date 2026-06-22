@@ -12,11 +12,11 @@ use crate::{
     middleware::auth::CurrentUser,
     models::user::UserResponse,
     utils::{
+        auth::{generate_secure_token, get_second_last_check, hash_password, verify_password},
         errors::{AppError, AppResult},
-        generate_secure_token, get_second_last_check, hash_password, render_verify_result,
         response::{success, success_message},
+        ui::render_verify_result,
         validation::{validate_email, validate_length},
-        verify_password,
     },
 };
 

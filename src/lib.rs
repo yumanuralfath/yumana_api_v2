@@ -1,27 +1,25 @@
-pub mod config;
-pub mod handlers;
-pub mod middleware;
-pub mod models;
-pub mod routes;
-pub mod services;
-pub mod utils;
+mod config;
+mod handlers;
+mod middleware;
+mod models;
+mod routes;
+mod services;
+mod utils;
 
-use crate::config::Config;
-use crate::services::mailer::SharedZoho;
-use crate::services::mailer::ZohoData;
-use crate::services::mailer::method::ZohoMailer;
-use axum::http;
-use http::HeaderValue;
+pub use crate::config::{Config, state::AppState};
+pub use crate::middleware::auth;
+pub use crate::models::user;
+pub use crate::routes::create_router;
+pub use crate::services::{jwt, mailer};
+pub use crate::utils::{auth as utils_auth, errors, response, ui, validation};
+
+use axum::http::{HeaderValue, request::Parts};
 use sqlx::postgres::PgPoolOptions;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
-use tower_http::cors::CorsLayer;
-
-use axum::http::request::Parts;
-use tower_http::cors::AllowOrigin;
-use tower_http::cors::Any;
-
-use services::jwt::JwtService;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 
 pub fn init_tracing_env() {
     dotenvy::dotenv().ok();
@@ -46,15 +44,15 @@ pub async fn init_db(database_url: &str) -> Result<sqlx::PgPool, Box<dyn std::er
     Ok(pool)
 }
 
-pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<ZohoMailer>) {
-    let jwt = Arc::new(JwtService::new(
+pub fn init_services(config: &Config) -> (Arc<jwt::JwtService>, Arc<mailer::method::ZohoMailer>) {
+    let jwt = Arc::new(jwt::JwtService::new(
         config.jwt_access_secret.clone(),
         config.jwt_refresh_secret.clone(),
         config.jwt_access_expiry,
         config.jwt_refresh_expiry,
     ));
 
-    let zoho_state: SharedZoho = Arc::new(Mutex::new(ZohoData {
+    let zoho_state: mailer::SharedZoho = Arc::new(Mutex::new(mailer::ZohoData {
         access_token: "".into(),
         refresh_token: config.zoho_refresh_token.clone(),
         client_id: config.client_id.clone(),
@@ -65,7 +63,7 @@ pub fn init_services(config: &Config) -> (Arc<JwtService>, Arc<ZohoMailer>) {
         account_id: config.account_id.clone(),
     }));
 
-    let email = Arc::new(ZohoMailer::new(zoho_state).expect("Email init failed"));
+    let email = Arc::new(mailer::method::ZohoMailer::new(zoho_state).expect("Email init failed"));
 
     (jwt, email)
 }

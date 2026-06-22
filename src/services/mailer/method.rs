@@ -137,61 +137,35 @@ impl ZohoMailer {
     }
 }
 
-pub async fn get_access_token(
-    code: &str,
-    state: &SharedZoho,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Client::new();
-    let config = Config::from_env()?;
-
-    let params = [
-        ("code", code),
-        ("client_id", &config.client_id),
-        ("client_secret", &config.client_secret),
-        ("redirect_uri", &config.redirect_url),
-        ("grant_type", "authorization_code"),
-    ];
-
-    let res = client
-        .post("https://accounts.zoho.com/oauth/v2/token")
-        .form(&params)
-        .send()
-        .await?;
-
-    let json: serde_json::Value = res.json().await?;
-
-    let access_token = json["access_token"]
-        .as_str()
-        .ok_or("missing access_token")?;
-
-    let mut data = state.lock().unwrap();
-    data.access_token = access_token.to_string();
-
-    Ok(())
-}
-
-// pub async fn get_account_id(state: &SharedZoho) -> Result<(), Box<dyn std::error::Error>> {
+// pub async fn get_access_token(
+//     code: &str,
+//     state: &SharedZoho,
+// ) -> Result<(), Box<dyn std::error::Error>> {
 //     let client = Client::new();
-//     let token = { state.lock().unwrap().access_token.clone() };
+//     let config = Config::from_env()?;
+//
+//     let params = [
+//         ("code", code),
+//         ("client_id", &config.client_id),
+//         ("client_secret", &config.client_secret),
+//         ("redirect_uri", &config.redirect_url),
+//         ("grant_type", "authorization_code"),
+//     ];
 //
 //     let res = client
-//         .get("https://mail.zoho.com/api/accounts")
-//         .header("Authorization", format!("Zoho-oauthtoken {}", token))
+//         .post("https://accounts.zoho.com/oauth/v2/token")
+//         .form(&params)
 //         .send()
 //         .await?;
 //
-//     // ← Tambahkan ini untuk lihat response aslinya
-//     let body = res.text().await?;
-//     tracing::info!("Zoho accounts response: {}", body);
+//     let json: serde_json::Value = res.json().await?;
 //
-//     let json: serde_json::Value = serde_json::from_str(&body)?;
-//
-//     let account_id = json["data"][0]["accountId"] // ← coba "accountId" bukan "account_id"
+//     let access_token = json["access_token"]
 //         .as_str()
-//         .ok_or("missing account_id")?;
+//         .ok_or("missing access_token")?;
 //
 //     let mut data = state.lock().unwrap();
-//     data.account_id = account_id.to_string();
+//     data.access_token = access_token.to_string();
 //
 //     Ok(())
 // }

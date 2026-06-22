@@ -1,5 +1,5 @@
 use uuid::Uuid;
-use yumana_api_v2::{models::user::UserRole, services::jwt::JwtService};
+use yumana_api_v2::{jwt::JwtService, user::UserRole};
 
 fn make_jwt() -> JwtService {
     JwtService::new(

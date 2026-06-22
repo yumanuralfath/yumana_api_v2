@@ -3,9 +3,8 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::{Level, error, info};
 
 use yumana_api_v2::{
-    config::{Config, state::AppState},
-    init_cors, init_db, init_services, init_tracing_env, routes, run_migrations,
-    services::mailer::callback,
+    AppState, Config, create_router, init_cors, init_db, init_services, init_tracing_env,
+    mailer::callback, run_migrations,
 };
 
 #[tokio::main]
@@ -13,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_tracing_env();
 
     let config = Config::from_env()?;
-    tracing::info!(
+    info!(
         "Starting {} on {}:{}",
         env!("CARGO_PKG_NAME"),
         config.host,
@@ -45,7 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config: Arc::new(config.clone()),
     };
 
-    let app = routes::create_router(app_state)
+    let app = create_router(app_state)
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
@@ -55,7 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = format!("{}:{}", config.host, config.port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
-    tracing::info!("Listening on {}", addr);
+    info!("Listening on {}", addr);
 
     axum::serve(listener, app).await?;
 

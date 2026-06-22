@@ -1,5 +1,5 @@
 use axum::response::IntoResponse;
-use yumana_api_v2::utils::errors::AppError;
+use yumana_api_v2::errors::AppError;
 
 // Helper: ambil status code dari AppError response
 fn status_of(err: AppError) -> u16 {

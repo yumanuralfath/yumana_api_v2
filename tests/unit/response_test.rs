@@ -1,5 +1,5 @@
-use yumana_api_v2::utils::response::paginated;
 use serde::Serialize;
+use yumana_api_v2::response::paginated;
 
 #[derive(Serialize)]
 struct MockData {
@@ -9,7 +9,7 @@ struct MockData {
 #[test]
 fn test_paginated_calculation() {
     let data = vec![MockData { id: 1 }, MockData { id: 2 }];
-    
+
     // Test case 1: Exact division
     let res = paginated(data, 10, 1, 2);
     assert_eq!(res["pagination"]["total_pages"], 5);
