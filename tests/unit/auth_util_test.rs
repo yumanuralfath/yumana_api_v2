@@ -1,4 +1,4 @@
-use yumana_api_v2::utils_auth::{generate_secure_token, hash_password, verify_password};
+use yumana_api_v2::utils::auth::{generate_secure_token, hash_password, verify_password};
 
 #[test]
 fn test_password_hashing_and_verification() {

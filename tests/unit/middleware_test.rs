@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::extract::Request;
 use axum::http::header;
-use yumana_api_v2::auth::extract_bearer_token;
+use yumana_api_v2::middleware::auth::extract_bearer_token;
 
 #[test]
 fn test_extract_bearer_token_success() {

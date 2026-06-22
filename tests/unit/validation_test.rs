@@ -1,4 +1,4 @@
-use yumana_api_v2::validation::{validate_email, validate_length};
+use yumana_api_v2::utils::validation::{validate_email, validate_length};
 
 #[test]
 fn test_validate_email_success() {

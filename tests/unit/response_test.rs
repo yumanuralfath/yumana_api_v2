@@ -1,5 +1,5 @@
 use serde::Serialize;
-use yumana_api_v2::response::paginated;
+use yumana_api_v2::utils::response::paginated;
 
 #[derive(Serialize)]
 struct MockData {

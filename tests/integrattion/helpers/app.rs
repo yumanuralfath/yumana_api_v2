@@ -6,8 +6,10 @@ use sqlx::postgres::PgPoolOptions;
 
 use yumana_api_v2::{
     AppState, Config, create_router,
-    jwt::JwtService,
-    mailer::{SharedZoho, ZohoData, method::ZohoMailer},
+    services::{
+        jwt::JwtService,
+        mailer::{SharedZoho, ZohoData, method::ZohoMailer},
+    },
 };
 
 use super::db::TestDb;

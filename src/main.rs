@@ -1,10 +1,9 @@
-use std::sync::Arc;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tracing::{Level, error, info};
+use tracing::{Level, info};
 
 use yumana_api_v2::{
-    AppState, Config, create_router, init_cors, init_db, init_services, init_tracing_env,
-    mailer::callback, run_migrations,
+    AppState, Config, create_router,
+    bootstrap::{init_cors, init_tracing_env},
 };
 
 #[tokio::main]
@@ -19,30 +18,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.port
     );
 
-    let db = init_db(&config.database_url).await?;
-    info!("url db: {}", &config.database_url);
-
-    // Auto Migration
-    run_migrations(&db).await.map_err(|e| {
-        error!("Migration Failed: {:?}", e);
-        e
-    })?;
-    info!("Database migration success");
-
-    let (jwt, email) = init_services(&config);
-
-    let refresh_state = email.state.clone();
-
-    tokio::spawn(async move {
-        callback::refresh_auth(refresh_state).await;
-    });
-
-    let app_state = AppState {
-        db,
-        jwt,
-        email,
-        config: Arc::new(config.clone()),
-    };
+    // Inisialisasi app state lengkap secara terenkapsulasi
+    let app_state = AppState::new(config.clone()).await?;
 
     let app = create_router(app_state)
         .layer(

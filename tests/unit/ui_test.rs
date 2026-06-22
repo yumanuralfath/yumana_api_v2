@@ -1,5 +1,5 @@
 use axum::response::IntoResponse;
-use yumana_api_v2::ui::render_verify_result;
+use yumana_api_v2::utils::ui::render_verify_result;
 
 #[tokio::test]
 async fn test_render_verify_result_success() {
