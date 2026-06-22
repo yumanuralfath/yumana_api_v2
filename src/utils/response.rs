@@ -22,7 +22,7 @@ pub fn success_with_status<T: Serialize>(status: StatusCode, data: T) -> impl In
     )
 }
 
-pub fn success_message(message: &str) -> impl IntoResponse {
+pub fn success_message(message: &str) -> (StatusCode, Json<Value>) {
     (
         StatusCode::OK,
         Json(json!({

@@ -356,4 +356,12 @@ async fn test_admin_delete_email_permissions() {
         .await;
     // Since access token is dummy/empty/invalid in test environment, Zoho API will return an error, causing a 400 BadRequest.
     assert_eq!(res.status_code(), 400);
+
+    // 4. Hit auto delete all sent emails (no query params)
+    let res = app
+        .server
+        .delete("/api/admin/emails")
+        .add_header("Authorization", auth_header(&admin_token))
+        .await;
+    assert_eq!(res.status_code(), 400);
 }

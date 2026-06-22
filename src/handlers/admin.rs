@@ -313,8 +313,8 @@ pub async fn get_stats(
 
 #[derive(Debug, Deserialize)]
 pub struct DeleteEmailQuery {
-    pub folder_id: String,
-    pub message_id: String,
+    pub folder_id: Option<String>,
+    pub message_id: Option<String>,
     pub expunge: Option<bool>,
 }
 
@@ -323,11 +323,27 @@ pub async fn delete_email(
     State(state): State<AppState>,
     Query(query): Query<DeleteEmailQuery>,
 ) -> AppResult<impl axum::response::IntoResponse> {
-    state
-        .email
-        .delete_email(&query.folder_id, &query.message_id, query.expunge)
-        .await
-        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+    match (query.folder_id, query.message_id) {
+        (Some(folder_id), Some(message_id)) => {
+            state
+                .email
+                .delete_email(&folder_id, &message_id, query.expunge)
+                .await
+                .map_err(|e| AppError::BadRequest(e.to_string()))?;
 
-    Ok(success_message("Email deleted successfully"))
+            Ok(success_message("Email deleted successfully"))
+        }
+        _ => {
+            let count = state
+                .email
+                .delete_all_sent_emails()
+                .await
+                .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+            Ok(success_message(&format!(
+                "Successfully deleted {} sent emails",
+                count
+            )))
+        }
+    }
 }

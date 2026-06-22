@@ -170,6 +170,88 @@ impl ZohoMailer {
         info!("Email deleted successfully via Zoho!");
         Ok(())
     }
+
+    pub async fn delete_all_sent_emails(&self) -> Result<usize, Box<dyn std::error::Error>> {
+        let data = self.state.lock().unwrap().clone();
+
+        let mut total_deleted_count = 0;
+        let mut start_index = 1;
+        let mut loop_count = 0;
+
+        // Limit to 20 iterations (max 4000 emails) to avoid potential infinite loops
+        while loop_count < 20 {
+            loop_count += 1;
+
+            let search_url = format!(
+                "https://mail.zoho.com/api/accounts/{}/messages/search?searchKey=from:{}&limit=200&start={}",
+                data.account_id, self.config.smtp_from_email, start_index
+            );
+            let res = self
+                .client
+                .get(&search_url)
+                .header(
+                    "Authorization",
+                    format!("Zoho-oauthtoken {}", data.access_token),
+                )
+                .send()
+                .await?;
+
+            if !res.status().is_success() {
+                let text = res.text().await.unwrap_or_default();
+                error!("Zoho search messages failed: {}", text);
+                return Err(format!("Failed to search messages from Zoho: {}", text).into());
+            }
+
+            let messages_json: serde_json::Value = res.json().await?;
+            let messages = match messages_json["data"].as_array() {
+                Some(arr) if !arr.is_empty() => arr,
+                _ => break, // No more matching messages
+            };
+
+            let mut batch_deleted = 0;
+            let mut skip_count = 0;
+            for msg in messages {
+                let message_id = match &msg["messageId"] {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => {
+                        skip_count += 1;
+                        continue;
+                    }
+                };
+
+                let folder_id = match &msg["folderId"] {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => {
+                        skip_count += 1;
+                        continue;
+                    }
+                };
+
+                // expunge: true deletes permanently to prevent space from filling up
+                if let Err(e) = self.delete_email(&folder_id, &message_id, Some(true)).await {
+                    error!("Failed to delete message {}: {:?}", message_id, e);
+                    skip_count += 1;
+                } else {
+                    batch_deleted += 1;
+                }
+            }
+
+            total_deleted_count += batch_deleted;
+
+            // If no messages were deleted and no messages were skipped, we have reached the end
+            if batch_deleted == 0 && skip_count == 0 {
+                break;
+            }
+
+            // Increment start_index by the number of messages skipped in this batch
+            start_index += skip_count;
+        }
+
+        info!("Deleted {} sent emails successfully", total_deleted_count);
+        Ok(total_deleted_count)
+    }
 }
 
 // pub async fn get_access_token(
