@@ -513,3 +513,17 @@ async fn test_health_check() {
     let body: Value = res.json();
     assert_eq!(body["data"]["status"], "OK");
 }
+
+#[tokio::test]
+async fn test_home_route() {
+    let app = TestApp::new().await;
+
+    let res = app.server.get("/").await;
+    assert_eq!(res.status_code(), 200);
+
+    let body: Value = res.json();
+    assert_eq!(body["success"], true);
+    assert_eq!(body["data"]["message"], "Hello");
+    assert_eq!(body["data"]["version"], env!("CARGO_PKG_VERSION"));
+}
+

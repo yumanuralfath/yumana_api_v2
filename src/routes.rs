@@ -8,6 +8,7 @@ use crate::{
     handlers::{
         admin,
         auth::{self},
+        home_route,
     },
     middleware::auth::{require_admin, require_auth},
 };
@@ -41,6 +42,7 @@ pub fn create_router(state: AppState) -> Router {
         .layer(middleware::from_fn_with_state(state.clone(), require_admin));
 
     Router::new()
+        .route("/", get(home_route))
         .nest("/api/auth", auth_routes)
         .nest("/api/admin", admin_routes)
         .with_state(state)
