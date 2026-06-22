@@ -68,3 +68,18 @@ fn test_error_message_preserved() {
 
     assert!(body["error"].as_str().unwrap().contains(&msg));
 }
+
+#[test]
+fn test_database_error_returns_500() {
+    let sqlx_err = sqlx::Error::RowNotFound;
+    let app_err = AppError::DatabaseError(sqlx_err);
+    assert_eq!(status_of(app_err), 500);
+}
+
+#[test]
+fn test_jwt_error_returns_401() {
+    let jwt_err = jsonwebtoken::errors::Error::from(jsonwebtoken::errors::ErrorKind::InvalidToken);
+    let app_err = AppError::JwtError(jwt_err);
+    assert_eq!(status_of(app_err), 401);
+}
+
