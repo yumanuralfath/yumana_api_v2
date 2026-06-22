@@ -322,3 +322,38 @@ async fn test_admin_revoke_user_sessions_flow() {
         .await;
     assert_eq!(refresh_res.status_code(), 401);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN DELETE EMAIL (ZOHO)
+// ═══════════════════════════════════════════════════════════════
+#[tokio::test]
+async fn test_admin_delete_email_permissions() {
+    let app = TestApp::new().await;
+
+    // 1. Unauthorized for anonymous
+    let res = app.server.delete("/api/admin/emails?folder_id=123&message_id=456").await;
+    assert_eq!(res.status_code(), 401);
+
+    // 2. Forbidden for regular user
+    let user = create_verified_user(&app.db.pool).await;
+    let user_token = login_as(&app, &user.email, &user.password).await;
+
+    let res = app
+        .server
+        .delete("/api/admin/emails?folder_id=123&message_id=456")
+        .add_header("Authorization", auth_header(&user_token))
+        .await;
+    assert_eq!(res.status_code(), 403);
+
+    // 3. BadRequest/Failure (from mock Zoho/fake auth token) for admin, showing it hits the handler
+    let admin = create_admin_user(&app.db.pool).await;
+    let admin_token = login_as(&app, &admin.email, &admin.password).await;
+
+    let res = app
+        .server
+        .delete("/api/admin/emails?folder_id=123&message_id=456")
+        .add_header("Authorization", auth_header(&admin_token))
+        .await;
+    // Since access token is dummy/empty/invalid in test environment, Zoho API will return an error, causing a 400 BadRequest.
+    assert_eq!(res.status_code(), 400);
+}

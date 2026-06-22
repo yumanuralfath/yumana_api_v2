@@ -310,3 +310,24 @@ pub async fn get_stats(
         "new_users_today": new_today
     })))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteEmailQuery {
+    pub folder_id: String,
+    pub message_id: String,
+    pub expunge: Option<bool>,
+}
+
+/// DELETE /api/admin/emails
+pub async fn delete_email(
+    State(state): State<AppState>,
+    Query(query): Query<DeleteEmailQuery>,
+) -> AppResult<impl axum::response::IntoResponse> {
+    state
+        .email
+        .delete_email(&query.folder_id, &query.message_id, query.expunge)
+        .await
+        .map_err(|e| AppError::BadRequest(e.to_string()))?;
+
+    Ok(success_message("Email deleted successfully"))
+}

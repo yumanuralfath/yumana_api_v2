@@ -135,6 +135,41 @@ impl ZohoMailer {
 
         self.send_email(to_email, &subject, html).await
     }
+
+    pub async fn delete_email(
+        &self,
+        folder_id: &str,
+        message_id: &str,
+        expunge: Option<bool>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let data = self.state.lock().unwrap().clone();
+        let mut url = format!(
+            "https://mail.zoho.com/api/accounts/{}/folders/{}/messages/{}",
+            data.account_id, folder_id, message_id
+        );
+        if let Some(expunge) = expunge {
+            url.push_str(&format!("?expunge={}", expunge));
+        }
+
+        let res = self
+            .client
+            .delete(&url)
+            .header(
+                "Authorization",
+                format!("Zoho-oauthtoken {}", data.access_token),
+            )
+            .send()
+            .await?;
+
+        if !res.status().is_success() {
+            let text = res.text().await.unwrap_or_default();
+            error!("Zoho delete email failed: {}", text);
+            return Err(format!("Failed to delete email from Zoho: {}", text).into());
+        }
+
+        info!("Email deleted successfully via Zoho!");
+        Ok(())
+    }
 }
 
 // pub async fn get_access_token(

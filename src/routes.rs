@@ -39,6 +39,7 @@ pub fn create_router(state: AppState) -> Router {
             "/users/{id}/revoke-sessions",
             post(admin::revoke_user_sessions),
         )
+        .route("/emails", delete(admin::delete_email))
         .layer(middleware::from_fn_with_state(state.clone(), require_admin));
 
     Router::new()
