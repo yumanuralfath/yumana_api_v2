@@ -116,8 +116,8 @@ impl ZohoMailer {
         token: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let reset_url = format!(
-            "{}/reset-password?token={}",
-            self.config.frontend_url, token
+            "{}/api/auth/reset-password?token={}",
+            self.config.app_url.trim_end_matches('/'), token
         );
 
         let subject = format!("Reset Password - {}", self.config.smtp_from_name);

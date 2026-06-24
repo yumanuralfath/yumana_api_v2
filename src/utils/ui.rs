@@ -35,3 +35,35 @@ pub fn render_verify_result(
         }
     }
 }
+
+#[derive(Template)]
+#[template(path = "reset_password.html")]
+pub struct ResetPasswordPageTemplate<'a> {
+    pub token: &'a str,
+    pub is_valid: bool,
+    pub error_msg: Option<&'a str>,
+    pub action_url: &'a str,
+}
+
+pub fn render_reset_password_page(
+    token: &str,
+    is_valid: bool,
+    error_msg: Option<&str>,
+    action_url: &str,
+) -> impl IntoResponse {
+    let template = ResetPasswordPageTemplate {
+        token,
+        is_valid,
+        error_msg,
+        action_url,
+    };
+
+    match template.render() {
+        Ok(html) => (StatusCode::OK, Html(html)).into_response(),
+        Err(e) => {
+            tracing::error!("Template rendering error: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
+        }
+    }
+}
+

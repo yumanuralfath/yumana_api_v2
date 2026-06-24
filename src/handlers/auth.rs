@@ -15,7 +15,7 @@ use crate::{
         auth::{generate_secure_token, get_second_last_check, hash_password, verify_password},
         errors::{AppError, AppResult},
         response::{success, success_message},
-        ui::render_verify_result,
+        ui::{render_reset_password_page, render_verify_result},
         validation::{validate_email, validate_length},
     },
 };
@@ -61,6 +61,11 @@ pub struct RefreshRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct VerifyEmailQuery {
+    pub token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ResetPasswordPageQuery {
     pub token: String,
 }
 
@@ -534,6 +539,68 @@ pub async fn forgot_password(
     Ok(success_message(
         "If that email exists, you will receive a reset link shortly.",
     ))
+}
+
+/// GET /api/auth/reset-password
+pub async fn reset_password_page(
+    State(state): State<AppState>,
+    Query(query): Query<ResetPasswordPageQuery>,
+) -> impl axum::response::IntoResponse {
+    let now = OffsetDateTime::now_utc();
+    let config = crate::config::Config::from_env().unwrap();
+    let frontend_url = config.frontend_url;
+
+    // Find valid token
+    let record = match sqlx::query!(
+        "SELECT id, user_id, expires_at, used_at FROM password_resets WHERE token = $1",
+        query.token
+    )
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => {
+            return render_reset_password_page(
+                &query.token,
+                false,
+                Some("Link reset password tidak valid atau tidak ditemukan."),
+                &frontend_url,
+            )
+            .into_response();
+        }
+        Err(_) => {
+            return render_reset_password_page(
+                &query.token,
+                false,
+                Some("Terjadi kesalahan sistem saat memeriksa tautan reset password."),
+                &frontend_url,
+            )
+            .into_response();
+        }
+    };
+
+    if record.used_at.is_some() {
+        return render_reset_password_page(
+            &query.token,
+            false,
+            Some("Link reset password ini sudah pernah digunakan."),
+            &frontend_url,
+        )
+        .into_response();
+    }
+
+    if record.expires_at < now {
+        return render_reset_password_page(
+            &query.token,
+            false,
+            Some("Link reset password ini sudah kadaluarsa (berlaku 1 jam)."),
+            &frontend_url,
+        )
+        .into_response();
+    }
+
+    // Valid token, render reset password page
+    render_reset_password_page(&query.token, true, None, &frontend_url).into_response()
 }
 
 /// POST /api/auth/reset-password

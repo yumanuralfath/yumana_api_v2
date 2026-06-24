@@ -437,6 +437,27 @@ async fn test_forgot_and_reset_password_flow() {
         .json(&json!({"refresh_token": old_refresh}))
         .await;
     assert_eq!(res.status_code(), 401);
+
+    // 9. GET reset-password page with invalid token
+    let res = app
+        .server
+        .get("/api/auth/reset-password?token=invalid_token")
+        .await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("Tautan Tidak Valid"));
+    assert!(html.contains("Link reset password tidak valid atau tidak ditemukan"));
+
+    // 10. GET reset-password page with valid token
+    let valid_token = create_reset_token(&app.db.pool, user.id).await;
+    let res = app
+        .server
+        .get(&format!("/api/auth/reset-password?token={}", valid_token))
+        .await;
+    assert_eq!(res.status_code(), 200);
+    let html = res.text();
+    assert!(html.contains("Atur Ulang Password"));
+    assert!(html.contains("id=\"new_password\""));
 }
 
 // ═══════════════════════════════════════════════════════════════

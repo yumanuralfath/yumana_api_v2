@@ -22,7 +22,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/refresh", post(auth::refresh_token))
         .route("/logout", post(auth::logout))
         .route("/forgot-password", post(auth::forgot_password))
-        .route("/reset-password", post(auth::reset_password))
+        .route("/reset-password", get(auth::reset_password_page).post(auth::reset_password))
         // Protected: require login
         .route(
             "/me",
