@@ -1,0 +1,19 @@
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS build
+COPY --from=planner /app/recipe.json recipe.json
+ENV SQLX_OFFLINE=true
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY . .
+RUN cargo build --release
+
+FROM gcr.io/distroless/cc-debian12:nonroot
+COPY --from=build /app/target/release/yumana_api_v2 /usr/local/bin/server
+ENV PORT=80
+EXPOSE 80
+ENTRYPOINT ["/usr/local/bin/server"]

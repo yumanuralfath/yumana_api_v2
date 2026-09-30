@@ -87,6 +87,27 @@ This project follows a **Local-First CI** approach. Instead of relying on remote
 cargo test
 ```
 
+---
+
+## Deploy to Vercel (without CLI)
+
+1. Push this repository to GitHub, GitLab, or Bitbucket.
+2. In the [Vercel Dashboard](https://vercel.com/dashboard), choose **Add New... → Project**, import the repository, and keep the project root at the repository root.
+3. Add the environment variables listed below under **Settings → Environment Variables**. Set them for Production and Preview as needed.
+4. Deploy from the dashboard. Future pushes to the connected branch create deployments automatically.
+
+The repository's `vercel.json` routes all paths to the container built from `Dockerfile.vercel`. The existing `Dockerfile` remains unchanged. The Vercel image defaults to port `80`, and the app reads Vercel's `PORT` and binds to `0.0.0.0`. No Vercel CLI configuration or local Vercel linking is required.
+
+Required runtime variables:
+
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`
+- `SMTP_USERNAME`, `SMTP_PASSWORD`, and `SMTP_FROM_EMAIL`
+- `APP_URL`
+- `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URL`, `ZOHO_REFRESH_TOKEN`, and `ACCOUNT_ID`
+
+Set `APP_ENV=release` in Vercel. Optional settings include `FRONTEND_URL` (or `DOMAIN_URL`), `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM_NAME`, `JWT_ACCESS_EXPIRY`, and `JWT_REFRESH_EXPIRY`. `HOST` defaults to `0.0.0.0`; Vercel supplies `PORT`. Use a PostgreSQL database reachable from Vercel. The app runs SQLx migrations during startup, so its database credentials must allow migrations.
+
 ### Pre-push Hook
 
 The installed hook will automatically run `cargo test` whenever you try to `git push`. If any test fails, the push will be aborted, keeping the remote repository clean.
