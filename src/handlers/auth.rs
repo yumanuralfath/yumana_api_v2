@@ -12,7 +12,10 @@ use crate::{
     middleware::auth::CurrentUser,
     models::user::UserResponse,
     utils::{
-        auth::{generate_secure_token, get_second_last_check, hash_password, verify_password},
+        auth::{
+            generate_secure_token, get_second_last_check, hash_password_async,
+            verify_password_async,
+        },
         errors::{AppError, AppResult},
         response::{success, success_message},
         ui::{render_reset_password_page, render_verify_result},
@@ -138,7 +141,7 @@ pub async fn register(
     }
 
     // Hash password
-    let password_hash = hash_password(&body.password)?;
+    let password_hash = hash_password_async(&body.password).await?;
 
     // Create user
     let is_debug = state.config.env == crate::config::AppEnv::Debug;
@@ -354,7 +357,7 @@ pub async fn login(
         return Err(AppError::Forbidden("Account is deactivated".to_string()));
     }
 
-    if !verify_password(&body.password, &user.password_hash)? {
+    if !verify_password_async(&body.password, &user.password_hash).await? {
         return Err(AppError::Unauthorized(
             "Invalid email or password".to_string(),
         ));
@@ -628,7 +631,7 @@ pub async fn reset_password(
         return Err(AppError::BadRequest("Reset token expired".to_string()));
     }
 
-    let new_hash = hash_password(&body.new_password)?;
+    let new_hash = hash_password_async(&body.new_password).await?;
 
     let mut tx = state.db.begin().await?;
 

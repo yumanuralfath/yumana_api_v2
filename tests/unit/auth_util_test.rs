@@ -10,6 +10,27 @@ fn test_password_hashing_and_verification() {
     assert!(!verify_password("wrongpassword", &hash).expect("Verification failed"));
 }
 
+#[tokio::test]
+async fn test_async_password_hashing_and_verification() {
+    use yumana_api_v2::utils::auth::{hash_password_async, verify_password_async};
+
+    let password = "mysecretpassword";
+    let hash = hash_password_async(password)
+        .await
+        .expect("Failed to hash password");
+
+    assert!(
+        verify_password_async(password, &hash)
+            .await
+            .expect("Verification failed")
+    );
+    assert!(
+        !verify_password_async("wrongpassword", &hash)
+            .await
+            .expect("Verification failed")
+    );
+}
+
 #[test]
 fn test_generate_secure_token() {
     let t1 = generate_secure_token(32);
