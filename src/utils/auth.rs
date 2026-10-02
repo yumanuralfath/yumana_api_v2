@@ -25,6 +25,21 @@ pub fn verify_password(password: &str, hash: &str) -> AppResult<bool> {
         .is_ok())
 }
 
+pub async fn hash_password_async(password: &str) -> AppResult<String> {
+    let password = password.to_owned();
+    tokio::task::spawn_blocking(move || hash_password(&password))
+        .await
+        .map_err(|_| AppError::InternalServerError)?
+}
+
+pub async fn verify_password_async(password: &str, hash: &str) -> AppResult<bool> {
+    let password = password.to_owned();
+    let hash = hash.to_owned();
+    tokio::task::spawn_blocking(move || verify_password(&password, &hash))
+        .await
+        .map_err(|_| AppError::InternalServerError)?
+}
+
 pub async fn get_second_last_check(db: &sqlx::PgPool) -> AppResult<Option<time::OffsetDateTime>> {
     let result: Option<time::OffsetDateTime> = sqlx::query_scalar!(
         r#"
